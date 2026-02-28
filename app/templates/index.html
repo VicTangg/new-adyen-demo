@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <h1 class="hero-title">Welcome</h1>
+  <p class="hero-lead">This app uses <strong>Flask</strong> as the API server and <strong>Jinja2</strong> for server-side rendered pages.</p>
+  <div class="hero-actions">
+    <a href="{{ url_for('pages.checkout') }}" class="btn btn-primary">Checkout (Adyen)</a>
+    <a href="{{ url_for('pages.about') }}" class="btn btn-secondary">About</a>
+    <a href="{{ url_for('api.list_items') }}" class="btn btn-secondary" target="_blank" rel="noopener">View API (JSON)</a>
+  </div>
+</section>
+<section class="cards">
+  <article class="card">
+    <h2>Backend</h2>
+    <p>Flask serves both REST-style API endpoints under <code>/api</code> and HTML pages rendered with Jinja2.</p>
+  </article>
+  <article class="card">
+    <h2>Frontend</h2>
+    <p>Pages are built from <code>base.html</code> and child templates. No separate front-end framework required.</p>
+  </article>
+  <article class="card">
+    <h2>API</h2>
+    <p>Try <a href="{{ url_for('api.health') }}">/api/health</a> and <a href="{{ url_for('api.list_items') }}">/api/items</a> for JSON responses.</p>
+  </article>
+</section>
+{% endblock %}

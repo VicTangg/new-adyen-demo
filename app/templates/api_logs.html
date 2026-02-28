@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block body_class %}api-logs-page-body{% endblock %}
+
+{% block content %}
+<section class="api-logs-page">
+  <h1 class="page-title">API Logs</h1>
+  <p class="api-logs-intro">Server-side Adyen API request/response logs. Use <a href="{{ url_for('pages.checkout') }}">Checkout</a> to trigger requests, then refresh below.</p>
+  <div class="adyen-api-logs-section">
+    <div class="adyen-api-logs-toolbar">
+      <button type="button" id="adyen-logs-refresh" class="adyen-logs-refresh-btn">Refresh</button>
+    </div>
+    <div id="adyen-api-logs" class="adyen-api-logs"></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var baseUrl = {{ request.url_root | tojson }};
+  var logsEl = document.getElementById('adyen-api-logs');
+  var refreshBtn = document.getElementById('adyen-logs-refresh');
+  if (!logsEl) return;
+
+  function formatTs(ms) {
+    var d = new Date(ms);
+    return d.toLocaleTimeString() + '.' + (ms % 1000);
+  }
+
+  function renderLogs(logs) {
+    if (!Array.isArray(logs) || logs.length === 0) {
+      logsEl.innerHTML = '<p class="adyen-logs-empty">No API calls yet. Use Checkout to trigger requests, then click Refresh.</p>';
+      return;
+    }
+    var html = '';
+    for (var i = logs.length - 1; i >= 0; i--) {
+      var log = logs[i];
+      var summary = log.endpoint + ' — ' + formatTs(log.ts);
+      if (log.error) summary += ' — <span class="adyen-logs-err">Error: ' + escapeHtml(log.error) + '</span>';
+      else if (log.response && log.response.resultCode) summary += ' — ' + escapeHtml(log.response.resultCode);
+      var reqJson = log.request != null ? JSON.stringify(log.request, null, 2) : '';
+      var resJson = log.response != null ? JSON.stringify(log.response, null, 2) : (log.error || '');
+      html += '<details class="adyen-log-entry">';
+      html += '<summary>' + summary + '</summary>';
+      html += '<div class="adyen-log-body">';
+      if (reqJson) html += '<div class="adyen-log-block"><strong>Request</strong><pre>' + escapeHtml(reqJson) + '</pre></div>';
+      if (resJson) html += '<div class="adyen-log-block"><strong>Response</strong><pre>' + escapeHtml(resJson) + '</pre></div>';
+      html += '</div></details>';
+    }
+    logsEl.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function fetchLogs() {
+    fetch(baseUrl + 'api/adyen/logs', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderLogs(data.logs || []); })
+      .catch(function () { logsEl.innerHTML = '<p class="adyen-logs-empty">Could not load logs.</p>'; });
+  }
+
+  if (refreshBtn) refreshBtn.addEventListener('click', fetchLogs);
+  fetchLogs();
+})();
+</script>
+{% endblock %}

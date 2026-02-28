@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page">
+  <h1 class="page-title">About</h1>
+  <p class="page-lead">A minimal web application with a Flask backend and Jinja2 server-side rendering.</p>
+  <div class="prose">
+    <p>This stack is ideal for content-focused sites, dashboards, or internal tools where you want full control over HTML and minimal JavaScript.</p>
+    <ul>
+      <li><strong>Flask</strong> — WSGI app and API routes</li>
+      <li><strong>Jinja2</strong> — Templates with inheritance, blocks, and filters</li>
+      <li><strong>Static assets</strong> — CSS (and optional JS) in <code>app/static</code></li>
+    </ul>
+  </div>
+  <p><a href="{{ url_for('pages.index') }}" class="link">← Back to Home</a></p>
+</section>
+{% endblock %}

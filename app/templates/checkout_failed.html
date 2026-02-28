@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="checkout-result checkout-failed">
+  <h1 class="page-title">Payment failed</h1>
+  <p class="result-lead">Your payment could not be completed. Please try again or use another payment method.</p>
+  <a href="{{ url_for('pages.checkout') }}" class="btn btn-primary">Try again</a>
+  <a href="{{ url_for('pages.index') }}" class="btn btn-secondary">Back to home</a>
+</section>
+{% endblock %}

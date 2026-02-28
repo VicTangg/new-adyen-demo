@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="checkout-return">
+  <p class="return-message">Completing your payment…</p>
+  <p class="return-fallback">If you are not redirected, <a href="{{ url_for('pages.checkout') }}">return to checkout</a>.</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var baseUrl = {{ request.url_root | tojson }};
+  var params = new URLSearchParams(window.location.search);
+  var redirectResult = params.get('redirectResult');
+  var payload = params.get('payload');
+  var paymentData = sessionStorage.getItem('adyenPaymentData');
+
+  var details = {};
+  if (redirectResult) details.redirectResult = redirectResult;
+  if (payload) details.payload = payload;
+
+  if (!Object.keys(details).length) {
+    window.location.href = baseUrl.replace(/\/$/, '') + '/checkout/failed';
+    return;
+  }
+
+  var body = { details: details };
+  if (paymentData) body.paymentData = paymentData;
+  try { sessionStorage.removeItem('adyenPaymentData'); } catch (e) {}
+
+  fetch(baseUrl + 'api/adyen/payments/details', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      var code = res.resultCode;
+      var successCodes = ['Authorised', 'Pending', 'Received', 'PartiallyAuthorised'];
+      if (successCodes.indexOf(code) !== -1) {
+        window.location.href = baseUrl.replace(/\/$/, '') + '/checkout/success';
+      } else {
+        window.location.href = baseUrl.replace(/\/$/, '') + '/checkout/failed';
+      }
+    })
+    .catch(function () {
+      window.location.href = baseUrl.replace(/\/$/, '') + '/checkout/failed';
+    });
+})();
+</script>
+{% endblock %}

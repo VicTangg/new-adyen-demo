@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ title | default('App') }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <nav class="nav">
+      <a class="nav-brand" href="{{ url_for('pages.index') }}">Flask + Jinja2</a>
+      <ul class="nav-links">
+        <li><a href="{{ url_for('pages.index') }}">Home</a></li>
+        <li><a href="{{ url_for('pages.checkout') }}">Checkout</a></li>
+        <li><a href="{{ url_for('pages.api_logs') }}">API Logs</a></li>
+        <li><a href="{{ url_for('pages.about') }}">About</a></li>
+        <li><a href="{{ url_for('api.health') }}" target="_blank" rel="noopener">API Health</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>Built with Flask and Jinja2 server-side rendering.</p>
+  </footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
