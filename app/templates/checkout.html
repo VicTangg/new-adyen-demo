@@ -19,8 +19,9 @@
     </ul>
     <p class="cart-total">
       <strong>Total:</strong>
-      <span class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency }}</span>
+      <span id="cart-total-amount" class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency }}</span>
     </p>
+    <p id="cart-discount-note" class="cart-discount-note" style="display: none;"></p>
   </div>
 
   <div class="checkout-payment">
@@ -163,12 +164,63 @@
     if (environment === 'test' && testResponseEl) testResponseEl.style.display = 'block';
 
     var dropinInstance = null;
+    var binDiscountApplied = false;
+    var alipayDiscountApplied = false;
+    var DISCOUNT_BIN_PREFIXES = ['411111', '555534'];
+    var DISCOUNT_RATE = 0.8; // 20% off => pay 80%
+    var ALIPAY_DISCOUNT_RATE = 0.7; // 30% off => pay 70%
+
+    function isQualifyingBin(issuerBin) {
+      if (!issuerBin) return false;
+      var bin = String(issuerBin);
+      for (var i = 0; i < DISCOUNT_BIN_PREFIXES.length; i++) {
+        if (bin.indexOf(DISCOUNT_BIN_PREFIXES[i]) === 0) return true;
+      }
+      return false;
+    }
+
+    function getDisplayAmountAndNote() {
+      if (alipayDiscountApplied) {
+        return { amount: Math.round(totalCents * ALIPAY_DISCOUNT_RATE) / 100, note: '30% discount (Alipay)' };
+      }
+      if (binDiscountApplied) {
+        return { amount: Math.round(totalCents * DISCOUNT_RATE) / 100, note: '20% discount (qualifying card)' };
+      }
+      return { amount: totalCents / 100, note: '' };
+    }
+
+    function updateCartTotalDisplay() {
+      var el = document.getElementById('cart-total-amount');
+      var noteEl = document.getElementById('cart-discount-note');
+      if (!el) return;
+      var info = getDisplayAmountAndNote();
+      el.textContent = info.amount.toFixed(2) + ' ' + currency;
+      if (noteEl) {
+        noteEl.textContent = info.note;
+        noteEl.style.display = info.note ? '' : 'none';
+      }
+    }
+
     var cardConfig = {
       hasHolderName: true,
       holderNameRequired: true,
-      billingAddressRequired: true
+      billingAddressRequired: true,
+      onFieldValid: function (data) {
+        var bin = (data && data.issuerBin) || (data && data.data && data.data.issuerBin);
+        binDiscountApplied = isQualifyingBin(bin);
+        updateCartTotalDisplay();
+      },
+      onFieldInvalid: function () {
+        binDiscountApplied = false;
+        updateCartTotalDisplay();
+      }
     };
     var dropinConfiguration = {
+      onSelect: function (component) {
+        var type = (component && component.type);
+        alipayDiscountApplied = (type === 'alipay');
+        updateCartTotalDisplay();
+      },
       paymentMethodsConfiguration: {
         card: cardConfig
       }
@@ -182,7 +234,10 @@
       paymentMethodsConfiguration: { card: cardConfig },
       onSubmit: function (state, component) {
         var payload = state.data;
-        payload.amount = { value: totalCents, currency: currency };
+        var amountCents = alipayDiscountApplied
+          ? Math.round(totalCents * ALIPAY_DISCOUNT_RATE)
+          : (binDiscountApplied ? Math.round(totalCents * DISCOUNT_RATE) : totalCents);
+        payload.amount = { value: amountCents, currency: currency };
         payload.reference = 'ref-' + Date.now();
         payload.browserInfo = getBrowserInfo();
         payload.channel = 'Web';

@@ -343,6 +343,12 @@ body.api-logs-page-body .main {
   margin-left: var(--space-sm);
 }
 
+.cart-discount-note {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  margin-top: var(--space-xs);
+}
+
 .checkout-payment {
   background: var(--color-surface);
   padding: var(--space-lg);
