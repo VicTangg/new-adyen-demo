@@ -206,7 +206,12 @@
       holderNameRequired: true,
       billingAddressRequired: true,
       onFieldValid: function (data) {
+        console.log(data)
         var bin = (data && data.issuerBin) || (data && data.data && data.data.issuerBin);
+        if (bin === undefined) {
+          binDiscountApplied = false;
+          return;
+        }
         binDiscountApplied = isQualifyingBin(bin);
         updateCartTotalDisplay();
       },
@@ -217,6 +222,7 @@
     };
     var dropinConfiguration = {
       onSelect: function (component) {
+        console.log(component)
         var type = (component && component.type);
         alipayDiscountApplied = (type === 'alipay');
         updateCartTotalDisplay();
