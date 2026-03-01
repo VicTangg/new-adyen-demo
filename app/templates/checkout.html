@@ -6,75 +6,77 @@
 <section class="checkout-page">
   <h1 class="page-title">Checkout</h1>
   <div class="checkout-layout">
-  <div class="checkout-cart">
-    <h2 class="checkout-subtitle">Your order</h2>
-    <ul class="cart-items">
-      {% for item in items %}
-      <li class="cart-item">
-        <span class="cart-item-name">{{ item.name }}</span>
-        <span class="cart-item-qty">× {{ item.quantity }}</span>
-        <span class="cart-item-price">{{ "%.2f"|format(item.price_cents * item.quantity / 100) }} {{ currency }}</span>
-      </li>
-      {% endfor %}
-    </ul>
-    <p class="cart-total">
-      <strong>Total:</strong>
-      <span id="cart-total-amount" class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency }}</span>
-    </p>
-    <p id="cart-discount-note" class="cart-discount-note" style="display: none;"></p>
-  </div>
-
-  <div class="checkout-payment">
-    <h2 class="checkout-subtitle">Payment</h2>
-    <div id="test-response-wrap" class="test-response-wrap" style="display: none;">
-      <label for="test-acquirer-response" class="test-response-label">Simulate outcome (test only)</label>
-      <select id="test-acquirer-response" class="test-response-select" aria-label="RequestedTestAcquirerResponseCode">
-        <option value="">Default (no override)</option>
-        <option value="0">0 – Error (Unknown)</option>
-        <option value="1">1 – Authorised</option>
-        <option value="2">2 – Refused</option>
-        <option value="3">3 – Refused (Referral)</option>
-        <option value="4">4 – Error (Acquirer Error)</option>
-        <option value="5">5 – Refused (Blocked Card)</option>
-        <option value="6">6 – Refused (Expired Card)</option>
-        <option value="7">7 – Refused (Invalid Amount)</option>
-        <option value="8">8 – Refused (Invalid Card Number)</option>
-        <option value="9">9 – Refused (Issuer Unavailable)</option>
-        <option value="10">10 – Refused (Not supported)</option>
-        <option value="11">11 – Refused (3D Not Authenticated)</option>
-        <option value="12">12 – Refused (Not enough balance)</option>
-        <option value="13">13 – Received (Pending)</option>
-        <option value="14">14 – Refused (Acquirer Fraud)</option>
-        <option value="15">15 – Refused (Cancelled)</option>
-        <option value="16">16 – Refused (Shopper Cancelled)</option>
-        <option value="22">22 – Cancelled (FRAUD-CANCELLED)</option>
-      </select>
+    <div class="checkout-cart">
+      <h2 class="checkout-subtitle">Your order</h2>
+      <ul class="cart-items">
+        {% for item in items %}
+        <li class="cart-item">
+          <span class="cart-item-name">{{ item.name }}</span>
+          <span class="cart-item-qty">× {{ item.quantity }}</span>
+          <span class="cart-item-price">{{ "%.2f"|format(item.price_cents * item.quantity / 100) }} {{ currency
+            }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="cart-total">
+        <strong>Total:</strong>
+        <span id="cart-total-amount" class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency
+          }}</span>
+      </p>
+      <p id="cart-discount-note" class="cart-discount-note" style="display: none;"></p>
     </div>
-    <div id="adyen-dropin-container"></div>
-    <div id="adyen-dropin-error" class="adyen-error" role="alert" hidden></div>
-  </div>
+
+    <div class="checkout-payment">
+      <h2 class="checkout-subtitle">Payment</h2>
+      <div id="test-response-wrap" class="test-response-wrap" style="display: none;">
+        <label for="test-acquirer-response" class="test-response-label">Simulate outcome (test only)</label>
+        <select id="test-acquirer-response" class="test-response-select" aria-label="RequestedTestAcquirerResponseCode">
+          <option value="">Default (no override)</option>
+          <option value="0">0 – Error (Unknown)</option>
+          <option value="1">1 – Authorised</option>
+          <option value="2">2 – Refused</option>
+          <option value="3">3 – Refused (Referral)</option>
+          <option value="4">4 – Error (Acquirer Error)</option>
+          <option value="5">5 – Refused (Blocked Card)</option>
+          <option value="6">6 – Refused (Expired Card)</option>
+          <option value="7">7 – Refused (Invalid Amount)</option>
+          <option value="8">8 – Refused (Invalid Card Number)</option>
+          <option value="9">9 – Refused (Issuer Unavailable)</option>
+          <option value="10">10 – Refused (Not supported)</option>
+          <option value="11">11 – Refused (3D Not Authenticated)</option>
+          <option value="12">12 – Refused (Not enough balance)</option>
+          <option value="13">13 – Received (Pending)</option>
+          <option value="14">14 – Refused (Acquirer Fraud)</option>
+          <option value="15">15 – Refused (Cancelled)</option>
+          <option value="16">16 – Refused (Shopper Cancelled)</option>
+          <option value="22">22 – Cancelled (FRAUD-CANCELLED)</option>
+        </select>
+      </div>
+      <div id="adyen-dropin-container"></div>
+      <div id="adyen-dropin-error" class="adyen-error" role="alert" hidden></div>
+    </div>
   </div>
 </section>
 
 <script>
-// Run before Adyen SDK: make touchstart/touchmove passive by default to avoid scroll-blocking warning
-(function () {
-  var supportsPassive = false;
-  try {
-    var opts = Object.defineProperty({}, 'passive', { get: function () { supportsPassive = true; } });
-    window.addEventListener('test', null, opts);
-  } catch (e) {}
-  if (!supportsPassive) return;
-  var _addEventListener = EventTarget.prototype.addEventListener;
-  EventTarget.prototype.addEventListener = function (type, fn, capture) {
-    var cap = capture;
-    if (type === 'touchstart' || type === 'touchmove') {
-      if (typeof capture !== 'object' || capture === null) cap = { passive: true, capture: !!capture };
-      else if (capture.passive === undefined) cap = Object.assign({}, capture, { passive: true });
-    }
-    return _addEventListener.call(this, type, fn, cap);
-  };
-})();
+  // Run before Adyen SDK: make touchstart/touchmove passive by default to avoid scroll-blocking warning
+  (function () {
+    var supportsPassive = false;
+    try {
+      var opts = Object.defineProperty({}, 'passive', { get: function () { supportsPassive = true; } });
+      window.addEventListener('test', null, opts);
+    } catch (e) { }
+    if (!supportsPassive) return;
+    var _addEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, fn, capture) {
+      var cap = capture;
+      if (type === 'touchstart' || type === 'touchmove') {
+        if (typeof capture !== 'object' || capture === null) cap = { passive: true, capture: !!capture };
+        else if (capture.passive === undefined) cap = Object.assign({}, capture, { passive: true });
+      }
+      return _addEventListener.call(this, type, fn, cap);
+    };
+  })();
 </script>
 <script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.16.0/adyen.js"
   crossorigin="anonymous"></script>
@@ -83,8 +85,9 @@
 
 {% block scripts %}
 <script>
-(function () {
-  var clientKey = {{ client_key | tojson }};
+  (function () {
+    var clientKey = {{ client_key | tojson
+  }};
   var environment = {{ environment | tojson }};
   var totalCents = {{ total_cents }};
   var currency = {{ currency | tojson }};
@@ -204,25 +207,25 @@
     var cardConfig = {
       hasHolderName: true,
       holderNameRequired: true,
-      billingAddressRequired: true,
+      // billingAddressRequired: true,
       onFieldValid: function (data) {
-        console.log(data)
-        var bin = (data && data.issuerBin) || (data && data.data && data.data.issuerBin);
-        if (bin === undefined) {
-          binDiscountApplied = false;
-          return;
+        console.log(data.fieldType)
+        if (data.fieldType === 'encryptedCardNumber') {
+          var bin = (data && data.issuerBin) || (data && data.data && data.data.issuerBin);
+          if (bin === undefined) {
+            binDiscountApplied = false;
+            updateCartTotalDisplay();
+            return;
+          }
+          binDiscountApplied = isQualifyingBin(bin);
+          updateCartTotalDisplay();
         }
-        binDiscountApplied = isQualifyingBin(bin);
-        updateCartTotalDisplay();
-      },
-      onFieldInvalid: function () {
-        binDiscountApplied = false;
-        updateCartTotalDisplay();
+        return
       }
     };
     var dropinConfiguration = {
       onSelect: function (component) {
-        console.log(component)
+        console.log(component.type)
         var type = (component && component.type);
         alipayDiscountApplied = (type === 'alipay');
         updateCartTotalDisplay();
@@ -239,23 +242,23 @@
       paymentMethodsResponse: paymentMethodsResponse,
       paymentMethodsConfiguration: { card: cardConfig },
       onSubmit: function (state, component) {
-        var payload = state.data;
         var amountCents = alipayDiscountApplied
           ? Math.round(totalCents * ALIPAY_DISCOUNT_RATE)
           : (binDiscountApplied ? Math.round(totalCents * DISCOUNT_RATE) : totalCents);
-        payload.amount = { value: amountCents, currency: currency };
-        payload.reference = 'ref-' + Date.now();
-        payload.browserInfo = getBrowserInfo();
-        payload.channel = 'Web';
-        payload.returnUrl = getReturnUrl();
-        // Required for 3DS2 (redirect and native): origin where Drop-in is rendered (no path/trailing slash)
+        console.log(binDiscountApplied)
+        console.log(amountCents)
+        var payload = Object.assign({}, state.data, {
+          amount: { value: amountCents, currency: currency },
+          reference: 'ref-' + Date.now(),
+          browserInfo: getBrowserInfo(),
+          channel: 'Web',
+          returnUrl: getReturnUrl()
+        });
         if (typeof window.location.origin !== 'undefined') payload.origin = window.location.origin;
         payload.additionalData = payload.additionalData || {};
-        // Prefer native 3DS2 (in-page challenge) when supported; otherwise redirect 3DS is used
         if (!payload.authenticationData) payload.authenticationData = {};
         if (!payload.authenticationData.threeDSRequestData) payload.authenticationData.threeDSRequestData = {};
         payload.authenticationData.threeDSRequestData.nativeThreeDS = 'preferred';
-        // Cardholder name is collected by Drop-in (hasHolderName/holderNameRequired) and sent in payload.paymentMethod.holderName
         var testCode = testAcquirerSelect ? testAcquirerSelect.value : '';
         if (testCode) {
           payload.additionalData.RequestedTestAcquirerResponseCode = parseInt(testCode, 10);
@@ -271,7 +274,7 @@
               if (response.action.paymentData) {
                 sessionStorage.setItem('adyenPaymentData', response.action.paymentData);
               }
-            } catch (e) {}
+            } catch (e) { }
           }
           // Let Drop-in handle 3DS2 action: redirect (action.url) or native (threeDS2 challenge in-page)
           if (response.action && dropinInstance && typeof dropinInstance.handleAction === 'function') {
@@ -333,6 +336,6 @@
     el.textContent = err.message || 'Failed to load payment methods';
     el.hidden = false;
   });
-})();
+}) ();
 </script>
 {% endblock %}

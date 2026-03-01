@@ -31,7 +31,7 @@ ADYEN_ENVIRONMENT=test
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
 - **Merchant account**: your test merchant account name.
-- In Customer Area, add your origin (e.g. `http://localhost:5000`) to **Allowed origins** for the Client Key.
+- In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
 
 ## Run
 
@@ -41,9 +41,9 @@ python run.py
 
 Then open:
 
-- **Home:** [http://127.0.0.1:5000/](http://127.0.0.1:5000/)
-- **Checkout (Adyen Drop-in):** [http://127.0.0.1:5000/checkout](http://127.0.0.1:5000/checkout)
-- **API:** [http://127.0.0.1:5000/api/health](http://127.0.0.1:5000/api/health)
+- **Home:** [http://127.0.0.1:5001/](http://127.0.0.1:5001/)
+- **Checkout (Adyen Drop-in):** [http://127.0.0.1:5001/checkout](http://127.0.0.1:5001/checkout)
+- **API:** [http://127.0.0.1:5001/api/health](http://127.0.0.1:5001/api/health)
 
 ## Checkout flow
 
