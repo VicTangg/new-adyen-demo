@@ -3,6 +3,7 @@ import copy
 import json
 import time
 import uuid
+import requests
 from flask import Blueprint, jsonify, request, current_app
 
 api_bp = Blueprint("api", __name__)
@@ -173,3 +174,196 @@ def adyen_payments_details():
 def adyen_logs():
     """Return recent server-side Adyen API request/response logs (for dev UI)."""
     return jsonify({"logs": list(ADYEN_API_LOGS)})
+
+
+@api_bp.route("/adyen/stores", methods=["GET"])
+def adyen_stores():
+    """Fetch stores from Adyen Management API for the merchant account."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/stores"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "endpoint": f"GET /merchants/{merchant_id}/stores"}
+
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": data.get("detail", data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("GET /merchants/{merchantId}/stores (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        stores = data.get("data", [])
+        out = [
+            {"id": s.get("id"), "reference": s.get("reference"), "description": s.get("description", s.get("reference", ""))}
+            for s in stores
+            if s.get("reference")
+        ]
+        resp_payload = {"stores": out, "itemsTotal": data.get("itemsTotal"), "pagesTotal": data.get("pagesTotal")}
+        _append_adyen_log("GET /merchants/{merchantId}/stores (Management)", req_payload, resp_payload, error=None)
+        return jsonify({"stores": out})
+    except requests.RequestException as e:
+        _append_adyen_log("GET /merchants/{merchantId}/stores (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen stores error")
+        return jsonify({"error": str(e)}), 502
+
+
+@api_bp.route("/adyen/stores/<store_id>", methods=["GET"])
+def adyen_store_detail(store_id):
+    """Fetch a single store's details from Adyen Management API."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/stores/{store_id}"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "storeId": store_id, "endpoint": f"GET /merchants/{merchant_id}/stores/{store_id}"}
+
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": data.get("detail", data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("GET /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        _append_adyen_log("GET /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, data, error=None)
+        return jsonify(data)
+    except requests.RequestException as e:
+        _append_adyen_log("GET /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen store detail error")
+        return jsonify({"error": str(e)}), 502
+
+
+@api_bp.route("/adyen/stores/<store_id>", methods=["PATCH"])
+def adyen_store_update(store_id):
+    """Update a store via Adyen Management API PATCH /merchants/{merchantId}/stores/{storeId}."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    data = request.get_json() or {}
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/stores/{store_id}"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "storeId": store_id, "endpoint": f"PATCH /merchants/{merchant_id}/stores/{store_id}", "body": data}
+
+    try:
+        r = requests.patch(url, headers=headers, json=data, timeout=10)
+        resp_data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": resp_data.get("detail", resp_data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("PATCH /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        _append_adyen_log("PATCH /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, resp_data, error=None)
+        return jsonify(resp_data)
+    except requests.RequestException as e:
+        _append_adyen_log("PATCH /merchants/{merchantId}/stores/{storeId} (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen store update error")
+        return jsonify({"error": str(e)}), 502
+
+
+@api_bp.route("/adyen/splitConfigurations/<split_configuration_id>", methods=["GET"])
+def adyen_split_configuration(split_configuration_id):
+    """Fetch split configuration profile from Adyen Management API."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/splitConfigurations/{split_configuration_id}"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "splitConfigurationId": split_configuration_id, "endpoint": f"GET /merchants/{merchant_id}/splitConfigurations/{split_configuration_id}"}
+
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": data.get("detail", data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("GET /merchants/{merchantId}/splitConfigurations/{splitConfigurationId} (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        _append_adyen_log("GET /merchants/{merchantId}/splitConfigurations/{splitConfigurationId} (Management)", req_payload, data, error=None)
+        return jsonify(data)
+    except requests.RequestException as e:
+        _append_adyen_log("GET /merchants/{merchantId}/splitConfigurations/{splitConfigurationId} (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen split configuration error")
+        return jsonify({"error": str(e)}), 502
+
+
+@api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>", methods=["PATCH"])
+def adyen_split_rule_update(split_configuration_id, rule_id):
+    """Update split conditions via PATCH /merchants/{merchantId}/splitConfigurations/{splitConfigurationId}/rules/{ruleId}."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    data = request.get_json() or {}
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/splitConfigurations/{split_configuration_id}/rules/{rule_id}"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "splitConfigurationId": split_configuration_id, "ruleId": rule_id, "body": data}
+
+    try:
+        r = requests.patch(url, headers=headers, json=data, timeout=10)
+        resp_data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": resp_data.get("detail", resp_data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId} (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId} (Management)", req_payload, resp_data, error=None)
+        return jsonify(resp_data)
+    except requests.RequestException as e:
+        _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId} (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen split rule update error")
+        return jsonify({"error": str(e)}), 502
+
+
+@api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>/splitLogic/<split_logic_id>", methods=["PATCH"])
+def adyen_split_logic_update(split_configuration_id, rule_id, split_logic_id):
+    """Update split logic via PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId}/splitLogic/{splitLogicId}."""
+    merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
+    api_key = current_app.config.get("ADYEN_API_KEY")
+    env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
+    if not merchant_id or not api_key:
+        return jsonify({"error": "Adyen not configured"}), 503
+
+    data = request.get_json() or {}
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    base = "https://management-live.adyen.com" if env == "live" else "https://management-test.adyen.com"
+    url = f"{base}/v3/merchants/{merchant_id}/splitConfigurations/{split_configuration_id}/rules/{rule_id}/splitLogic/{split_logic_id}"
+    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+    req_payload = {"merchantId": merchant_id, "splitConfigurationId": split_configuration_id, "ruleId": rule_id, "splitLogicId": split_logic_id, "body": data}
+
+    try:
+        r = requests.patch(url, headers=headers, json=data, timeout=10)
+        resp_data = r.json() if r.text else {}
+        if not r.ok:
+            err_resp = {"error": resp_data.get("detail", resp_data.get("title", r.text)), "status": r.status_code}
+            _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../splitLogic/{splitLogicId} (Management)", req_payload, None, error=err_resp.get("error"))
+            return jsonify(err_resp), r.status_code
+        _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../splitLogic/{splitLogicId} (Management)", req_payload, resp_data, error=None)
+        return jsonify(resp_data)
+    except requests.RequestException as e:
+        _append_adyen_log("PATCH /merchants/{merchantId}/splitConfigurations/.../splitLogic/{splitLogicId} (Management)", req_payload, None, error=e)
+        current_app.logger.exception("Adyen split logic update error")
+        return jsonify({"error": str(e)}), 502

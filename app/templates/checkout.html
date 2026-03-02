@@ -52,11 +52,29 @@
           <option value="22">22 – Cancelled (FRAUD-CANCELLED)</option>
         </select>
       </div>
+      <div id="store-select-wrap" class="test-response-wrap">
+        <label for="store-select" class="test-response-label">Store</label>
+        <select id="store-select" class="test-response-select" aria-label="Store to pay to">
+          <option value="">Loading stores…</option>
+        </select>
+        <div id="store-details" class="store-details" style="display: none;"></div>
+      </div>
       <div id="adyen-dropin-container"></div>
       <div id="adyen-dropin-error" class="adyen-error" role="alert" hidden></div>
     </div>
   </div>
 </section>
+
+<div id="split-config-modal" class="split-config-modal" role="dialog" aria-labelledby="split-config-modal-title" aria-modal="true" hidden>
+  <div class="split-config-modal-backdrop"></div>
+  <div class="split-config-modal-content">
+    <div class="split-config-modal-header">
+      <h2 id="split-config-modal-title" class="split-config-modal-title">Split Configuration</h2>
+      <button type="button" class="split-config-modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="split-config-modal-body" class="split-config-modal-body"></div>
+  </div>
+</div>
 
 <script>
   // Run before Adyen SDK: make touchstart/touchmove passive by default to avoid scroll-blocking warning
@@ -164,7 +182,370 @@
 
     var testResponseEl = document.getElementById('test-response-wrap');
     var testAcquirerSelect = document.getElementById('test-acquirer-response');
+    var storeSelectEl = document.getElementById('store-select');
     if (environment === 'test' && testResponseEl) testResponseEl.style.display = 'block';
+
+    var storeDetailsEl = document.getElementById('store-details');
+    var currentStoreId = null;
+    var currentStore = null;
+    function fmt(val) { return val == null || val === '' ? '—' : String(val); }
+    function fmtObj(obj) {
+      if (obj == null) return '—';
+      if (typeof obj !== 'object') return fmt(obj);
+      var parts = [];
+      for (var k in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, k)) {
+          var v = obj[k];
+          if (v != null && typeof v === 'object' && !Array.isArray(v)) parts.push(k + ': ' + fmtObj(v));
+          else if (Array.isArray(v)) parts.push(k + ': ' + (v.length ? v.join(', ') : '—'));
+          else parts.push(k + ': ' + fmt(v));
+        }
+      }
+      return parts.join(' · ');
+    }
+    function renderStoreDetails(store, storeId) {
+      if (!storeDetailsEl) return;
+      currentStoreId = storeId || currentStoreId;
+      currentStore = store;
+      if (!store || store.error) {
+        var err = store && store.error ? String(store.error).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
+        storeDetailsEl.innerHTML = err ? '<span class="store-details-err">' + err + '</span>' : '';
+        storeDetailsEl.style.display = store && store.error ? '' : 'none';
+        return;
+      }
+      var split = store.splitConfiguration || {};
+      var rows = [];
+      var fields = ['id', 'reference', 'description', 'status', 'merchantId', 'phoneNumber', 'shopperStatement', 'externalReferenceId'];
+      fields.forEach(function (f) {
+        if (store[f] != null) rows.push('<dt>' + f + '</dt><dd>' + fmt(store[f]) + '</dd>');
+      });
+      if (store.address && typeof store.address === 'object') {
+        rows.push('<dt>address</dt><dd>' + fmtObj(store.address) + '</dd>');
+      }
+      if (store.localizedInformation && typeof store.localizedInformation === 'object') {
+        rows.push('<dt>localizedInformation</dt><dd>' + fmtObj(store.localizedInformation) + '</dd>');
+      }
+      if (store.splitConfiguration && typeof store.splitConfiguration === 'object') {
+        var sc = store.splitConfiguration;
+        var scParts = [];
+        if (sc.balanceAccountId) scParts.push('balanceAccountId: ' + fmt(sc.balanceAccountId));
+        if (sc.splitConfigurationId) {
+          var sid = String(sc.splitConfigurationId).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+          scParts.push('splitConfigurationId: <a href="#" class="split-config-link" data-id="' + sid + '">' + sid + '</a>');
+        }
+        rows.push('<dt>splitConfiguration</dt><dd>' + (scParts.length ? scParts.join(' · ') : fmtObj(sc)) + '</dd>');
+      } else {
+        rows.push('<dt>splitConfiguration</dt><dd>—</dd>');
+      }
+      if (store.subMerchantData && typeof store.subMerchantData === 'object') {
+        rows.push('<dt>subMerchantData</dt><dd>' + fmtObj(store.subMerchantData) + '</dd>');
+      }
+      if (store.businessLineIds && store.businessLineIds.length) {
+        rows.push('<dt>businessLineIds</dt><dd>' + store.businessLineIds.join(', ') + '</dd>');
+      }
+      var editBtn = '<button type="button" class="store-edit-btn" id="store-edit-btn">Edit splitConfiguration</button>';
+      var balVal = (split.balanceAccountId || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      var splitVal = (split.splitConfigurationId || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      var editForm = '<form id="store-split-form" class="store-split-form" style="display: none;">' +
+        '<label for="split-balanceAccountId">balanceAccountId</label>' +
+        '<input type="text" id="split-balanceAccountId" name="balanceAccountId" placeholder="Balance account ID" value="' + balVal + '">' +
+        '<label for="split-splitConfigurationId">splitConfigurationId</label>' +
+        '<input type="text" id="split-splitConfigurationId" name="splitConfigurationId" placeholder="Split configuration profile ID" value="' + splitVal + '">' +
+        '<div class="store-split-form-actions">' +
+        '<button type="submit" class="store-save-btn">Save</button>' +
+        '<button type="button" class="store-cancel-btn">Cancel</button>' +
+        '</div></form>';
+      storeDetailsEl.innerHTML = '<details class="store-details-collapse" open><summary>Store details</summary>' +
+        '<dl class="store-details-dl">' + rows.join('') + '</dl>' +
+        '<div class="store-edit-wrap">' + editBtn + editForm + '</div></details>';
+      storeDetailsEl.style.display = '';
+      var editBtnEl = document.getElementById('store-edit-btn');
+      var formEl = document.getElementById('store-split-form');
+      var cancelBtn = formEl && formEl.querySelector('.store-cancel-btn');
+      if (editBtnEl) {
+        editBtnEl.addEventListener('click', function () {
+          if (formEl) formEl.style.display = '';
+          if (editBtnEl) editBtnEl.style.display = 'none';
+        });
+      }
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+          if (formEl) formEl.style.display = 'none';
+          if (editBtnEl) editBtnEl.style.display = '';
+        });
+      }
+      if (formEl) {
+        formEl.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var balanceAccountId = (document.getElementById('split-balanceAccountId') || {}).value || '';
+          var splitConfigurationId = (document.getElementById('split-splitConfigurationId') || {}).value || '';
+          var payload = {};
+          if (balanceAccountId || splitConfigurationId) {
+            payload.splitConfiguration = {};
+            if (balanceAccountId) payload.splitConfiguration.balanceAccountId = balanceAccountId;
+            if (splitConfigurationId) payload.splitConfiguration.splitConfigurationId = splitConfigurationId;
+          }
+          if (!currentStoreId) return;
+          fetch(baseUrl + 'api/adyen/stores/' + encodeURIComponent(currentStoreId), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }).then(function (r) { return r.json(); }).then(function (res) {
+            if (res.error) {
+              renderStoreDetails({ error: res.error }, currentStoreId);
+              return;
+            }
+            if (formEl) formEl.style.display = 'none';
+            if (editBtnEl) editBtnEl.style.display = '';
+            var updated = (res && (res.id || res.reference)) ? res : null;
+            if (updated) {
+              renderStoreDetails(updated, currentStoreId);
+            } else {
+              fetch(baseUrl + 'api/adyen/stores/' + encodeURIComponent(currentStoreId), { method: 'GET' })
+                .then(function (r) { return r.json(); })
+                .then(function (refreshed) { renderStoreDetails(refreshed, currentStoreId); });
+            }
+          }).catch(function (err) { renderStoreDetails({ error: err.message || 'Update failed' }, currentStoreId); });
+        });
+      }
+    }
+    function onStoreSelectChange() {
+      var opt = storeSelectEl ? storeSelectEl.options[storeSelectEl.selectedIndex] : null;
+      var storeId = opt && opt.getAttribute ? opt.getAttribute('data-store-id') : null;
+      if (!storeId) {
+        renderStoreDetails(null, null);
+        return;
+      }
+      storeDetailsEl.innerHTML = '<span class="store-details-loading">Loading…</span>';
+      storeDetailsEl.style.display = '';
+      fetch(baseUrl + 'api/adyen/stores/' + encodeURIComponent(storeId), { method: 'GET' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderStoreDetails(data, storeId); })
+        .catch(function (err) { renderStoreDetails({ error: err.message || 'Failed to load store' }, storeId); });
+    }
+    fetch(baseUrl + 'api/adyen/stores', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!storeSelectEl) return;
+        storeSelectEl.innerHTML = '<option value="">Default (no store)</option>';
+        var stores = data.stores || [];
+        stores.forEach(function (s) {
+          var opt = document.createElement('option');
+          opt.value = s.reference;
+          if (s.id) opt.setAttribute('data-store-id', s.id);
+          opt.textContent = s.description || s.reference || s.id || s.reference;
+          storeSelectEl.appendChild(opt);
+        });
+        storeSelectEl.addEventListener('change', onStoreSelectChange);
+      })
+      .catch(function () {
+        if (storeSelectEl) storeSelectEl.innerHTML = '<option value="">No stores (check API)</option>';
+      });
+
+    var splitConfigModal = document.getElementById('split-config-modal');
+    var splitConfigModalBody = document.getElementById('split-config-modal-body');
+    var currentSplitConfigId = null;
+    function showSplitConfigModal() {
+      if (splitConfigModal) { splitConfigModal.hidden = false; splitConfigModal.removeAttribute('hidden'); }
+      document.addEventListener('keydown', onSplitConfigModalKeydown);
+    }
+    function hideSplitConfigModal() {
+      if (splitConfigModal) { splitConfigModal.hidden = true; splitConfigModal.setAttribute('hidden', ''); }
+      document.removeEventListener('keydown', onSplitConfigModalKeydown);
+    }
+    function onSplitConfigModalKeydown(e) {
+      if (e.key === 'Escape') hideSplitConfigModal();
+    }
+    function renderSplitConfigModal(data) {
+      if (!splitConfigModalBody) return;
+      if (data.error) {
+        splitConfigModalBody.innerHTML = '<p class="split-config-err">' + String(data.error).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>';
+        showSplitConfigModal();
+        return;
+      }
+      if (data.splitConfigurationId) currentSplitConfigId = data.splitConfigurationId;
+      function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+      var html = [];
+      if (data.description) html.push('<p class="split-config-desc">' + esc(data.description) + '</p>');
+      if (data.splitConfigurationId) html.push('<p class="split-config-id"><strong>splitConfigurationId:</strong> ' + esc(data.splitConfigurationId) + '</p>');
+      var rules = data.rules || [];
+      rules.forEach(function (rule, idx) {
+        var conds = [];
+        var condFields = ['cardRegion', 'currency', 'fundingSource', 'paymentMethod', 'shopperInteraction'];
+        condFields.forEach(function (f) { if (rule[f]) conds.push(f + ': ' + esc(rule[f])); });
+        var logic = rule.splitLogic || {};
+        var logicRows = [];
+        var logicFields = ['acquiringFees', 'adyenCommission', 'adyenFees', 'adyenMarkup', 'chargeback', 'chargebackCostAllocation', 'interchange', 'paymentFee', 'refund', 'refundCostAllocation', 'remainder', 'schemeFee', 'surcharge', 'tip'];
+        logicFields.forEach(function (f) { if (logic[f]) logicRows.push('<tr><td>' + f + '</td><td>' + esc(String(logic[f])) + '</td></tr>'); });
+        if (logic.commission && typeof logic.commission === 'object') {
+          var c = logic.commission;
+          var cStr = [];
+          if (c.fixedAmount != null) cStr.push('fixedAmount: ' + c.fixedAmount);
+          if (c.variablePercentage != null) cStr.push('variablePercentage: ' + c.variablePercentage + ' bps');
+          if (cStr.length) logicRows.push('<tr><td>commission</td><td>' + cStr.join(', ') + '</td></tr>');
+        }
+        if (logic.additionalCommission && typeof logic.additionalCommission === 'object') {
+          var ac = logic.additionalCommission;
+          var acStr = [];
+          if (ac.balanceAccountId) acStr.push('balanceAccountId: ' + esc(ac.balanceAccountId));
+          if (ac.fixedAmount != null) acStr.push('fixedAmount: ' + ac.fixedAmount);
+          if (ac.variablePercentage != null) acStr.push('variablePercentage: ' + ac.variablePercentage + ' bps');
+          if (acStr.length) logicRows.push('<tr><td>additionalCommission</td><td>' + acStr.join(', ') + '</td></tr>');
+        }
+        if (logic.splitLogicId) logicRows.push('<tr><td>splitLogicId</td><td>' + esc(logic.splitLogicId) + '</td></tr>');
+        var ruleId = rule.ruleId || '';
+        var splitLogicId = logic.splitLogicId || '';
+        var condForm = ruleId && currentSplitConfigId ? '<form class="split-rule-cond-form" data-split-id="' + esc(currentSplitConfigId) + '" data-rule-id="' + esc(ruleId) + '" style="display:none">' +
+          '<label>currency</label><input name="currency" value="' + esc(rule.currency) + '" placeholder="EUR">' +
+          '<label>fundingSource</label><select name="fundingSource"><option value="ANY"' + (rule.fundingSource === 'ANY' ? ' selected' : '') + '>ANY</option><option value="credit"' + (rule.fundingSource === 'credit' ? ' selected' : '') + '>credit</option><option value="debit"' + (rule.fundingSource === 'debit' ? ' selected' : '') + '>debit</option><option value="prepaid"' + (rule.fundingSource === 'prepaid' ? ' selected' : '') + '>prepaid</option><option value="deferred_debit"' + (rule.fundingSource === 'deferred_debit' ? ' selected' : '') + '>deferred_debit</option><option value="charged"' + (rule.fundingSource === 'charged' ? ' selected' : '') + '>charged</option></select>' +
+          '<label>paymentMethod</label><input name="paymentMethod" value="' + esc(rule.paymentMethod) + '" placeholder="ANY or variant">' +
+          '<label>shopperInteraction</label><select name="shopperInteraction"><option value="ANY"' + (rule.shopperInteraction === 'ANY' ? ' selected' : '') + '>ANY</option><option value="Ecommerce"' + (rule.shopperInteraction === 'Ecommerce' ? ' selected' : '') + '>Ecommerce</option><option value="ContAuth"' + (rule.shopperInteraction === 'ContAuth' ? ' selected' : '') + '>ContAuth</option><option value="Moto"' + (rule.shopperInteraction === 'Moto' ? ' selected' : '') + '>Moto</option><option value="POS"' + (rule.shopperInteraction === 'POS' ? ' selected' : '') + '>POS</option></select>' +
+          '<label>cardRegion (optional)</label><select name="cardRegion"><option value="">—</option><option value="ANY"' + (rule.cardRegion === 'ANY' ? ' selected' : '') + '>ANY</option><option value="domestic"' + (rule.cardRegion === 'domestic' ? ' selected' : '') + '>domestic</option><option value="international"' + (rule.cardRegion === 'international' ? ' selected' : '') + '>international</option><option value="interRegional"' + (rule.cardRegion === 'interRegional' ? ' selected' : '') + '>interRegional</option><option value="intraRegional"' + (rule.cardRegion === 'intraRegional' ? ' selected' : '') + '>intraRegional</option></select>' +
+          '<div class="split-edit-actions"><button type="submit">Save</button><button type="button" class="split-edit-cancel">Cancel</button></div></form>' : '';
+        var logicForm = ruleId && splitLogicId && currentSplitConfigId ? '<form class="split-rule-logic-form" data-split-id="' + esc(currentSplitConfigId) + '" data-rule-id="' + esc(ruleId) + '" data-split-logic-id="' + esc(splitLogicId) + '" style="display:none">' +
+          '<label>commission.fixedAmount</label><input type="number" name="commissionFixedAmount" value="' + (logic.commission && logic.commission.fixedAmount != null ? logic.commission.fixedAmount : '') + '" placeholder="minor units">' +
+          '<label>commission.variablePercentage</label><input type="number" name="commissionVariablePercentage" value="' + (logic.commission && logic.commission.variablePercentage != null ? logic.commission.variablePercentage : '') + '" placeholder="basis points">' +
+          '<label>paymentFee</label><select name="paymentFee"><option value="">—</option><option value="deductFromLiableAccount"' + (logic.paymentFee === 'deductFromLiableAccount' ? ' selected' : '') + '>deductFromLiableAccount</option><option value="deductFromOneBalanceAccount"' + (logic.paymentFee === 'deductFromOneBalanceAccount' ? ' selected' : '') + '>deductFromOneBalanceAccount</option></select>' +
+          '<label>refund</label><select name="refund"><option value="">—</option><option value="deductFromLiableAccount"' + (logic.refund === 'deductFromLiableAccount' ? ' selected' : '') + '>deductFromLiableAccount</option><option value="deductFromOneBalanceAccount"' + (logic.refund === 'deductFromOneBalanceAccount' ? ' selected' : '') + '>deductFromOneBalanceAccount</option><option value="deductAccordingToSplitRatio"' + (logic.refund === 'deductAccordingToSplitRatio' ? ' selected' : '') + '>deductAccordingToSplitRatio</option></select>' +
+          '<label>refundCostAllocation</label><select name="refundCostAllocation"><option value="">—</option><option value="deductFromLiableAccount"' + (logic.refundCostAllocation === 'deductFromLiableAccount' ? ' selected' : '') + '>deductFromLiableAccount</option><option value="deductFromOneBalanceAccount"' + (logic.refundCostAllocation === 'deductFromOneBalanceAccount' ? ' selected' : '') + '>deductFromOneBalanceAccount</option></select>' +
+          '<label>chargeback</label><select name="chargeback"><option value="">—</option><option value="deductFromLiableAccount"' + (logic.chargeback === 'deductFromLiableAccount' ? ' selected' : '') + '>deductFromLiableAccount</option><option value="deductFromOneBalanceAccount"' + (logic.chargeback === 'deductFromOneBalanceAccount' ? ' selected' : '') + '>deductFromOneBalanceAccount</option><option value="deductAccordingToSplitRatio"' + (logic.chargeback === 'deductAccordingToSplitRatio' ? ' selected' : '') + '>deductAccordingToSplitRatio</option></select>' +
+          '<label>chargebackCostAllocation</label><select name="chargebackCostAllocation"><option value="">—</option><option value="deductFromLiableAccount"' + (logic.chargebackCostAllocation === 'deductFromLiableAccount' ? ' selected' : '') + '>deductFromLiableAccount</option><option value="deductFromOneBalanceAccount"' + (logic.chargebackCostAllocation === 'deductFromOneBalanceAccount' ? ' selected' : '') + '>deductFromOneBalanceAccount</option></select>' +
+          '<label>remainder</label><select name="remainder"><option value="">—</option><option value="addToLiableAccount"' + (logic.remainder === 'addToLiableAccount' ? ' selected' : '') + '>addToLiableAccount</option><option value="addToOneBalanceAccount"' + (logic.remainder === 'addToOneBalanceAccount' ? ' selected' : '') + '>addToOneBalanceAccount</option></select>' +
+          '<div class="split-edit-actions"><button type="submit">Save</button><button type="button" class="split-edit-cancel">Cancel</button></div></form>' : '';
+        html.push('<div class="split-config-rule">');
+        html.push('<h3 class="split-config-rule-title">Rule ' + (idx + 1) + (ruleId ? ' (' + esc(ruleId) + ')' : '') + '</h3>');
+        if (condForm || logicForm) html.push('<div class="split-config-rule-actions">');
+        if (condForm) html.push('<button type="button" class="split-edit-cond-btn">Edit conditions</button>' + condForm);
+        if (logicForm) html.push('<button type="button" class="split-edit-logic-btn">Edit split logic</button>' + logicForm);
+        if (condForm || logicForm) html.push('</div>');
+        if (conds.length) html.push('<div class="split-config-conditions"><strong>Conditions:</strong> ' + conds.join(' · ') + '</div>');
+        if (logicRows.length) html.push('<table class="split-config-logic-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>' + logicRows.join('') + '</tbody></table>');
+        html.push('</div>');
+      });
+      splitConfigModalBody.innerHTML = html.length ? html.join('') : '<p class="split-config-empty">No rules.</p>';
+      showSplitConfigModal();
+    }
+    document.getElementById('store-select-wrap').addEventListener('click', function (e) {
+      var link = e.target && e.target.closest && e.target.closest('.split-config-link');
+      if (!link) return;
+      e.preventDefault();
+      var id = link.getAttribute('data-id');
+      if (!id) return;
+      currentSplitConfigId = id;
+      splitConfigModalBody.innerHTML = '<p class="split-config-loading">Loading…</p>';
+      showSplitConfigModal();
+      fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(id), { method: 'GET' })
+        .then(function (r) { return r.json(); })
+        .then(renderSplitConfigModal)
+        .catch(function (err) { renderSplitConfigModal({ error: err.message || 'Failed to load' }); });
+    });
+    if (splitConfigModal) {
+      var closeBtn = splitConfigModal.querySelector('.split-config-modal-close');
+      var backdrop = splitConfigModal.querySelector('.split-config-modal-backdrop');
+      if (closeBtn) closeBtn.addEventListener('click', hideSplitConfigModal);
+      if (backdrop) backdrop.addEventListener('click', hideSplitConfigModal);
+    }
+    splitConfigModal.addEventListener('click', function (e) {
+      var condBtn = e.target && e.target.closest && e.target.closest('.split-edit-cond-btn');
+      var logicBtn = e.target && e.target.closest && e.target.closest('.split-edit-logic-btn');
+      var cancelBtn = e.target && e.target.closest && e.target.closest('.split-edit-cancel');
+      if (condBtn) {
+        var rule = condBtn.closest('.split-config-rule');
+        var form = rule && rule.querySelector('.split-rule-cond-form');
+        if (form) {
+          var show = form.style.display === 'none' || !form.style.display;
+          form.style.display = show ? '' : 'none';
+          condBtn.style.display = show ? 'none' : '';
+        }
+      }
+      if (logicBtn) {
+        var rule = logicBtn.closest('.split-config-rule');
+        var form = rule && rule.querySelector('.split-rule-logic-form');
+        if (form) {
+          var show = form.style.display === 'none' || !form.style.display;
+          form.style.display = show ? '' : 'none';
+          logicBtn.style.display = show ? 'none' : '';
+        }
+      }
+      if (cancelBtn) {
+        var form = cancelBtn.closest('form');
+        var rule = form && form.closest('.split-config-rule');
+        if (form) form.style.display = 'none';
+        if (rule) {
+          var condBtn = rule.querySelector('.split-edit-cond-btn');
+          var logicBtn = rule.querySelector('.split-edit-logic-btn');
+          if (condBtn) condBtn.style.display = '';
+          if (logicBtn) logicBtn.style.display = '';
+        }
+      }
+    });
+    splitConfigModal.addEventListener('submit', function (e) {
+      var condForm = e.target && e.target.closest && e.target.closest('.split-rule-cond-form');
+      var logicForm = e.target && e.target.closest && e.target.closest('.split-rule-logic-form');
+      if (condForm) {
+        e.preventDefault();
+        var splitId = condForm.getAttribute('data-split-id');
+        var ruleId = condForm.getAttribute('data-rule-id');
+        if (!splitId || !ruleId) return;
+        var payload = {
+          currency: (condForm.querySelector('[name=currency]') || {}).value || 'EUR',
+          fundingSource: (condForm.querySelector('[name=fundingSource]') || {}).value || 'ANY',
+          paymentMethod: (condForm.querySelector('[name=paymentMethod]') || {}).value || 'ANY',
+          shopperInteraction: (condForm.querySelector('[name=shopperInteraction]') || {}).value || 'ANY'
+        };
+        var cardRegion = (condForm.querySelector('[name=cardRegion]') || {}).value;
+        if (cardRegion) payload.cardRegion = cardRegion;
+        fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId) + '/rules/' + encodeURIComponent(ruleId), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res.error) { alert(res.error); return; }
+          condForm.style.display = 'none';
+          var rule = condForm.closest('.split-config-rule');
+          if (rule) { var b = rule.querySelector('.split-edit-cond-btn'); if (b) b.style.display = ''; }
+          fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId), { method: 'GET' })
+            .then(function (r) { return r.json(); }).then(renderSplitConfigModal);
+        }).catch(function (err) { alert(err.message || 'Update failed'); });
+      }
+      if (logicForm) {
+        e.preventDefault();
+        var splitId = logicForm.getAttribute('data-split-id');
+        var ruleId = logicForm.getAttribute('data-rule-id');
+        var splitLogicId = logicForm.getAttribute('data-split-logic-id');
+        if (!splitId || !ruleId || !splitLogicId) return;
+        var payload = {};
+        var fixedAmt = (logicForm.querySelector('[name=commissionFixedAmount]') || {}).value;
+        var varPct = (logicForm.querySelector('[name=commissionVariablePercentage]') || {}).value;
+        if (fixedAmt || varPct) {
+          payload.commission = {};
+          if (fixedAmt) payload.commission.fixedAmount = parseInt(fixedAmt, 10);
+          if (varPct) payload.commission.variablePercentage = parseInt(varPct, 10);
+        }
+        var pf = (logicForm.querySelector('[name=paymentFee]') || {}).value;
+        if (pf) payload.paymentFee = pf;
+        var rf = (logicForm.querySelector('[name=refund]') || {}).value;
+        if (rf) payload.refund = rf;
+        var rca = (logicForm.querySelector('[name=refundCostAllocation]') || {}).value;
+        if (rca) payload.refundCostAllocation = rca;
+        var cb = (logicForm.querySelector('[name=chargeback]') || {}).value;
+        if (cb) payload.chargeback = cb;
+        var cca = (logicForm.querySelector('[name=chargebackCostAllocation]') || {}).value;
+        if (cca) payload.chargebackCostAllocation = cca;
+        var rem = (logicForm.querySelector('[name=remainder]') || {}).value;
+        if (rem) payload.remainder = rem;
+        if (!payload.commission && Object.keys(payload).length === 0) { alert('commission (fixedAmount or variablePercentage) required'); return; }
+        if (!payload.commission) payload.commission = { fixedAmount: 0 };
+        fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId) + '/rules/' + encodeURIComponent(ruleId) + '/splitLogic/' + encodeURIComponent(splitLogicId), {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res.error) { alert(res.error); return; }
+          logicForm.style.display = 'none';
+          var rule = logicForm.closest('.split-config-rule');
+          if (rule) { var b = rule.querySelector('.split-edit-logic-btn'); if (b) b.style.display = ''; }
+          fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId), { method: 'GET' })
+            .then(function (r) { return r.json(); }).then(renderSplitConfigModal);
+        }).catch(function (err) { alert(err.message || 'Update failed'); });
+      }
+    });
 
     var dropinInstance = null;
     var binDiscountApplied = false;
@@ -263,6 +644,8 @@
         if (testCode) {
           payload.additionalData.RequestedTestAcquirerResponseCode = parseInt(testCode, 10);
         }
+        var storeRef = storeSelectEl && storeSelectEl.value ? storeSelectEl.value : '';
+        if (storeRef) payload.store = storeRef;
 
         return fetch(baseUrl + 'api/adyen/payments', {
           method: 'POST',

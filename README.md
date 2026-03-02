@@ -50,6 +50,7 @@ Then open:
 - **Checkout page** shows a cart of 2 items and the total; the Adyen Drop-in is initialized with that amount (Advanced flow).
 - **Payment methods** are loaded via `POST /api/adyen/paymentMethods`; payment is submitted via `POST /api/adyen/payments`; 3DS or redirect details are sent to `POST /api/adyen/payments/details`.
 - **Redirect flow** (e.g. iDEAL, 3DS redirect): after the shopper returns to `/checkout/return`, the page completes the payment with `payments/details` and redirects to success or failed.
+- **Store & split configuration**: Select a store to pay to; view store details and edit `splitConfiguration`. Click `splitConfigurationId` to open a popup with the split configuration profile; each rule can be edited (conditions via [PATCH rules](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)), split logic via [PATCH splitLogic](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)/splitLogic/(splitLogicId))).
 
 ## API Endpoints
 
@@ -60,6 +61,12 @@ Then open:
 | POST | `/api/adyen/paymentMethods` | Adyen: get payment methods (body: amount, currency, countryCode, optional browserInfo) |
 | POST | `/api/adyen/payments` | Adyen: submit payment (Drop-in payload) |
 | POST | `/api/adyen/payments/details` | Adyen: submit details (e.g. after 3DS) |
+| GET | `/api/adyen/stores` | Adyen Management: list stores |
+| GET | `/api/adyen/stores/<store_id>` | Adyen Management: get store details |
+| PATCH | `/api/adyen/stores/<store_id>` | Adyen Management: update store (e.g. splitConfiguration) |
+| GET | `/api/adyen/splitConfigurations/<id>` | Adyen Management: get split configuration profile |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (currency, fundingSource, paymentMethod, shopperInteraction) |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (commission, paymentFee, refund, chargeback, etc.) |
 
 ## Pages
 
