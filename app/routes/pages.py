@@ -5,8 +5,8 @@ pages_bp = Blueprint("pages", __name__)
 
 # Demo cart: 2 items with total for Adyen (amount in minor units)
 CHECKOUT_ITEMS = [
-    {"id": "1", "name": "Wireless Headphones", "price_cents": 5999, "quantity": 1},
-    {"id": "2", "name": "USB-C Hub", "price_cents": 3499, "quantity": 1},
+    {"id": "1", "name": "Wireless Headphones", "price_cents": 5999, "quantity": 1, "image": "images/headphones.svg"},
+    {"id": "2", "name": "USB-C Hub", "price_cents": 3499, "quantity": 1, "image": "images/hub.svg"},
 ]
 CHECKOUT_CURRENCY = "EUR"
 

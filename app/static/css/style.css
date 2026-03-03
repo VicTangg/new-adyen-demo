@@ -330,8 +330,19 @@ body.api-logs-page-body .main {
   border-bottom: none;
 }
 
+.cart-item-image {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: var(--color-bg);
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+}
+
 .cart-item-name {
   flex: 1;
+  min-width: 0;
 }
 
 .cart-item-qty {
@@ -1015,8 +1026,14 @@ body.api-logs-page-body .main {
     gap: var(--space-xs);
   }
 
+  .cart-item-image {
+    width: 40px;
+    height: 40px;
+  }
+
   .cart-item-name {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   #adyen-dropin-container {
