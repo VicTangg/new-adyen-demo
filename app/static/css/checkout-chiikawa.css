@@ -1,0 +1,229 @@
+/* Chiikawa Market–inspired checkout design
+   Soft, friendly aesthetic: cream, pastels, rounded shapes */
+
+body.checkout-page-body {
+  --chiikawa-bg: #faf9f6;
+  --chiikawa-surface: #ffffff;
+  --chiikawa-text: #2d2a26;
+  --chiikawa-muted: #6b6560;
+  --chiikawa-accent: #e8a87c;
+  --chiikawa-accent-hover: #d4956a;
+  --chiikawa-border: #ebe8e4;
+  --chiikawa-mint: #b8e6d5;
+  --chiikawa-pink: #ffe4ec;
+  --chiikawa-radius: 12px;
+  --chiikawa-radius-lg: 16px;
+  --chiikawa-font: "M PLUS Rounded 1c", "Nunito", "Hiragino Sans", sans-serif;
+}
+
+body.checkout-page-body {
+  background: var(--chiikawa-bg);
+  font-family: var(--chiikawa-font);
+}
+
+body.checkout-page-body .site-header {
+  background: var(--chiikawa-surface);
+  border-bottom: 1px solid var(--chiikawa-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+body.checkout-page-body .nav-brand {
+  font-weight: 700;
+  color: var(--chiikawa-text);
+}
+
+body.checkout-page-body .nav-links a {
+  color: var(--chiikawa-muted);
+}
+
+body.checkout-page-body .nav-links a:hover {
+  color: var(--chiikawa-accent);
+}
+
+body.checkout-page-body .site-footer {
+  background: var(--chiikawa-surface);
+  border-top: 1px solid var(--chiikawa-border);
+  color: var(--chiikawa-muted);
+}
+
+body.checkout-page-body .main {
+  background: var(--chiikawa-bg);
+}
+
+/* Checkout page layout */
+body.checkout-page-body .checkout-page {
+  padding: var(--space-xl) 0;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+body.checkout-page-body .checkout-page .page-title::after {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 3px;
+  margin: var(--space-sm) auto 0;
+  background: linear-gradient(90deg, var(--chiikawa-mint), var(--chiikawa-pink));
+  border-radius: 2px;
+}
+
+body.checkout-page-body .checkout-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+body.checkout-page-body .checkout-cart,
+body.checkout-page-body .checkout-payment {
+  background: var(--chiikawa-surface);
+  padding: var(--space-xl);
+  border-radius: var(--chiikawa-radius-lg);
+  border: 1px solid var(--chiikawa-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+body.checkout-page-body .checkout-subtitle {
+  font-family: var(--chiikawa-font);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--chiikawa-text);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 2px solid var(--chiikawa-mint);
+}
+
+body.checkout-page-body .cart-items {
+  list-style: none;
+  margin: 0 0 var(--space-md);
+  padding: 0;
+}
+
+body.checkout-page-body .cart-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  border-bottom: 1px dashed var(--chiikawa-border);
+}
+
+body.checkout-page-body .cart-item:last-of-type {
+  border-bottom: none;
+}
+
+body.checkout-page-body .cart-item-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--chiikawa-text);
+}
+
+body.checkout-page-body .cart-item-qty {
+  color: var(--chiikawa-muted);
+  font-size: 0.95rem;
+}
+
+body.checkout-page-body .cart-item-price {
+  font-weight: 600;
+  color: var(--chiikawa-text);
+}
+
+/* Estimated total — Chiikawa-style */
+body.checkout-page-body .cart-total {
+  margin: var(--space-lg) 0 0;
+  padding: var(--space-md) 0 0;
+  border-top: 2px solid var(--chiikawa-border);
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, var(--chiikawa-pink) 0%, transparent 100%);
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  border-radius: var(--chiikawa-radius);
+  border: none;
+}
+
+body.checkout-page-body .cart-total-amount {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--chiikawa-accent);
+}
+
+body.checkout-page-body .cart-discount-note {
+  font-size: 0.85rem;
+  color: var(--chiikawa-muted);
+  margin-top: var(--space-xs);
+}
+
+body.checkout-page-body .cart-tax-note {
+  font-size: 0.9rem;
+  color: var(--chiikawa-muted);
+  margin-top: var(--space-sm);
+}
+
+/* Payment section */
+body.checkout-page-body .checkout-payment .checkout-subtitle {
+  border-bottom-color: var(--chiikawa-pink);
+}
+
+body.checkout-page-body .payment-intro {
+  font-size: 0.95rem;
+  color: var(--chiikawa-muted);
+  margin: 0 0 var(--space-md);
+}
+
+body.checkout-page-body .test-response-wrap {
+  background: linear-gradient(135deg, var(--chiikawa-mint) 8%, transparent 30%);
+  border: 1px solid rgba(184, 230, 213, 0.6);
+  border-radius: var(--chiikawa-radius);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+body.checkout-page-body .test-response-label {
+  color: var(--chiikawa-muted);
+  font-weight: 600;
+}
+
+body.checkout-page-body .test-response-select {
+  border-radius: var(--chiikawa-radius);
+  border: 1px solid var(--chiikawa-border);
+  font-family: var(--chiikawa-font);
+}
+
+/* Terms note — Chiikawa cart style */
+.checkout-terms-note {
+  margin-top: var(--space-lg);
+  padding: var(--space-md);
+  background: var(--chiikawa-bg);
+  border-radius: var(--chiikawa-radius);
+  font-size: 0.9rem;
+  color: var(--chiikawa-muted);
+  line-height: 1.5;
+}
+
+.checkout-terms-note a {
+  color: var(--chiikawa-accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.checkout-terms-note a:hover {
+  text-decoration: underline;
+}
+
+/* Adyen container styling */
+body.checkout-page-body #adyen-dropin-container {
+  margin-top: var(--space-md);
+}
+
+body.checkout-page-body .adyen-error {
+  color: #c45c5c;
+  font-size: 0.9rem;
+  margin-top: var(--space-sm);
+}
+
+/* Responsive: two columns on wider screens */
+@media (min-width: 768px) {
+  body.checkout-page-body .checkout-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    align-items: start;
+  }
+}

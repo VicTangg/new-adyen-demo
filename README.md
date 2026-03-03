@@ -27,15 +27,24 @@ ADYEN_API_KEY=your_adyen_api_key
 ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
+HMAC_SECRET=your_webhook_hmac_key
 ```
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
+- **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
 
 ## Run
 
 ```bash
+./start.sh
+```
+
+Or manually:
+
+```bash
+source .venv/bin/activate
 python run.py
 ```
 
@@ -52,6 +61,16 @@ Then open:
 - **Redirect flow** (e.g. iDEAL, 3DS redirect): after the shopper returns to `/checkout/return`, the page completes the payment with `payments/details` and redirects to success or failed.
 - **Store & split configuration**: Select a store to pay to; view store details and edit `splitConfiguration`. Click `splitConfigurationId` to open a popup with the split configuration profile; each rule can be edited (conditions via [PATCH rules](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)), split logic via [PATCH splitLogic](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)/splitLogic/(splitLogicId))).
 
+## Webhooks
+
+Configure Adyen Standard webhooks in [Customer Area → Developers → Webhooks](https://docs.adyen.com/development-resources/webhooks/configure-and-manage):
+
+1. **URL**: `https://your-domain/api/adyen/webhooks` (use ngrok for local testing)
+2. **Method**: JSON
+3. **Security**: Generate HMAC key and add it to `.env` as `HMAC_SECRET`
+
+The endpoint verifies the HMAC signature using [Adyen's Python library](https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures) and only accepts events with a valid signature. View received events on the **Webhook Logs** page.
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -67,6 +86,8 @@ Then open:
 | GET | `/api/adyen/splitConfigurations/<id>` | Adyen Management: get split configuration profile |
 | PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (currency, fundingSource, paymentMethod, shopperInteraction) |
 | PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (commission, paymentFee, refund, chargeback, etc.) |
+| POST | `/api/adyen/webhooks` | Adyen Standard webhook endpoint (HMAC verification required; accepts only valid signatures) |
+| GET | `/api/adyen/webhooks/logs` | Webhook events received (for dev UI) |
 
 ## Pages
 
@@ -77,4 +98,6 @@ Then open:
 | `/checkout/return` | Return URL for redirect/3DS (completes payment client-side) |
 | `/checkout/success` | Payment success |
 | `/checkout/failed` | Payment failed |
+| `/api-logs` | API Logs: server-side Adyen request/response logs |
+| `/webhook-logs` | Webhook Logs: Adyen webhook events received and verified |
 | `/about` | About (Jinja2-rendered) |

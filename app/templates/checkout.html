@@ -2,12 +2,19 @@
 
 {% block body_class %}checkout-page-body{% endblock %}
 
+{% block head_extra %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/checkout-chiikawa.css') }}">
+{% endblock %}
+
 {% block content %}
 <section class="checkout-page">
-  <h1 class="page-title">Checkout</h1>
+  <h1 class="page-title">Your cart</h1>
   <div class="checkout-layout">
     <div class="checkout-cart">
-      <h2 class="checkout-subtitle">Your order</h2>
+      <h2 class="checkout-subtitle">Order summary</h2>
       <ul class="cart-items">
         {% for item in items %}
         <li class="cart-item">
@@ -19,15 +26,19 @@
         {% endfor %}
       </ul>
       <p class="cart-total">
-        <strong>Total:</strong>
-        <span id="cart-total-amount" class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency
-          }}</span>
+        <strong>Estimated total</strong>
+        <span id="cart-total-amount" class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency }}</span>
       </p>
       <p id="cart-discount-note" class="cart-discount-note" style="display: none;"></p>
+      <p class="cart-tax-note">Taxes included. Discounts and shipping calculated at checkout.</p>
+      <div class="checkout-terms-note">
+        Before purchasing, please agree to our <a href="{{ url_for('pages.about') }}">Terms of Use</a> and <a href="{{ url_for('pages.about') }}">Privacy Policy</a>. We cannot accept any changes or cancellations of orders after they have been confirmed.
+      </div>
     </div>
 
     <div class="checkout-payment">
       <h2 class="checkout-subtitle">Payment</h2>
+      <p class="payment-intro">Complete your purchase securely below.</p>
       <div id="test-response-wrap" class="test-response-wrap" style="display: none;">
         <label for="test-acquirer-response" class="test-response-label">Simulate outcome (test only)</label>
         <select id="test-acquirer-response" class="test-response-select" aria-label="RequestedTestAcquirerResponseCode">

@@ -11,6 +11,10 @@ api_bp = Blueprint("api", __name__)
 # In-memory store for Adyen API logs (bounded); do not log full card/encrypted data
 ADYEN_API_LOGS = []
 ADYEN_API_LOGS_MAX = 50
+
+# In-memory store for received webhook events (bounded)
+ADYEN_WEBHOOK_LOGS = []
+ADYEN_WEBHOOK_LOGS_MAX = 100
 SENSITIVE_KEYS = frozenset({"encryptedCardNumber", "encryptedSecurityCode", "encryptedExpiryMonth", "encryptedExpiryYear", "encryptedPassword", "cvc", "number"})  # redact in paymentMethod
 
 
@@ -174,6 +178,67 @@ def adyen_payments_details():
 def adyen_logs():
     """Return recent server-side Adyen API request/response logs (for dev UI)."""
     return jsonify({"logs": list(ADYEN_API_LOGS)})
+
+
+def _append_webhook_log(payload, valid, error=None):
+    """Append a webhook event to the in-memory store."""
+    entry = {
+        "id": str(uuid.uuid4())[:8],
+        "ts": round(time.time() * 1000),
+        "payload": _sanitize(copy.deepcopy(payload)) if payload else None,
+        "valid": valid,
+        "error": str(error) if error else None,
+    }
+    ADYEN_WEBHOOK_LOGS.append(entry)
+    while len(ADYEN_WEBHOOK_LOGS) > ADYEN_WEBHOOK_LOGS_MAX:
+        ADYEN_WEBHOOK_LOGS.pop(0)
+
+
+@api_bp.route("/adyen/webhooks", methods=["POST"])
+def adyen_webhooks():
+    """Accept Adyen Standard webhooks. Verify HMAC signature; only accept and store if valid."""
+    hmac_key = current_app.config.get("HMAC_SECRET", "").strip()
+    if not hmac_key:
+        current_app.logger.warning("HMAC_SECRET not configured; rejecting webhook")
+        return jsonify({"error": "Webhook not configured"}), 503
+
+    try:
+        payload = request.get_json(force=True, silent=False)
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    if not payload:
+        return jsonify({"error": "Empty body"}), 400
+
+    notification_items = payload.get("notificationItems") or []
+    if not notification_items:
+        return jsonify({"error": "No notificationItems"}), 400
+
+    from Adyen.util import is_valid_hmac_notification
+
+    for item in notification_items:
+        try:
+            notification = item.get("NotificationRequestItem") or item
+        except (TypeError, AttributeError):
+            notification = item
+        if not isinstance(notification, dict):
+            return jsonify({"error": "Invalid notification structure"}), 400
+        if not notification.get("additionalData", {}).get("hmacSignature"):
+            return jsonify({"error": "Missing hmacSignature"}), 400
+        try:
+            if not is_valid_hmac_notification(notification, hmac_key):
+                return jsonify({"error": "HMAC signature invalid"}), 401
+        except Exception as e:
+            return jsonify({"error": f"HMAC verification failed: {e}"}), 401
+
+    _append_webhook_log(payload, valid=True)
+    return "accepted", 200
+
+
+@api_bp.route("/adyen/webhooks/logs", methods=["GET"])
+def adyen_webhook_logs():
+    """Return webhook events (for dev UI)."""
+    return jsonify({"logs": list(ADYEN_WEBHOOK_LOGS)})
 
 
 @api_bp.route("/adyen/stores", methods=["GET"])

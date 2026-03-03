@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block body_class %}api-logs-page-body{% endblock %}
+
+{% block content %}
+<section class="api-logs-page">
+  <h1 class="page-title">Webhook Logs</h1>
+  <p class="api-logs-intro">Adyen webhook events received at <code>/api/adyen/webhooks</code>. Configure your webhook URL in <a href="https://docs.adyen.com/development-resources/webhooks/configure-and-manage" target="_blank" rel="noopener">Customer Area → Developers → Webhooks</a>. Only events with valid HMAC signature are accepted and stored.</p>
+  <div class="adyen-api-logs-section">
+    <div class="adyen-api-logs-toolbar">
+      <button type="button" id="webhook-logs-refresh" class="adyen-logs-refresh-btn">Refresh</button>
+    </div>
+    <div id="webhook-logs" class="adyen-api-logs"></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var baseUrl = {{ request.url_root | tojson }};
+  var logsEl = document.getElementById('webhook-logs');
+  var refreshBtn = document.getElementById('webhook-logs-refresh');
+  if (!logsEl) return;
+
+  function formatTs(ms) {
+    var d = new Date(ms);
+    return d.toLocaleTimeString() + '.' + (ms % 1000);
+  }
+
+  function getEventSummary(log) {
+    var p = log.payload || {};
+    var items = (p.notificationItems || [])[0];
+    var n = items && items.NotificationRequestItem ? items.NotificationRequestItem : {};
+    var eventCode = n.eventCode || '—';
+    var pspRef = n.pspReference || '—';
+    var success = n.success != null ? String(n.success) : '—';
+    var valid = log.valid ? '✓' : '✗';
+    return eventCode + ' — ' + pspRef + ' — success: ' + success + ' — HMAC: ' + valid + ' — ' + formatTs(log.ts);
+  }
+
+  function renderLogs(logs) {
+    if (!Array.isArray(logs) || logs.length === 0) {
+      logsEl.innerHTML = '<p class="adyen-logs-empty">No webhook events yet. Configure your webhook in Adyen Customer Area and trigger a payment, then click Refresh.</p>';
+      return;
+    }
+    var html = '';
+    for (var i = logs.length - 1; i >= 0; i--) {
+      var log = logs[i];
+      var summary = getEventSummary(log);
+      if (log.error) summary += ' — <span class="adyen-logs-err">' + escapeHtml(log.error) + '</span>';
+      var payloadJson = log.payload != null ? JSON.stringify(log.payload, null, 2) : '';
+      html += '<details class="adyen-log-entry">';
+      html += '<summary>' + summary + '</summary>';
+      html += '<div class="adyen-log-body">';
+      if (payloadJson) html += '<div class="adyen-log-block"><strong>Payload</strong><pre>' + escapeHtml(payloadJson) + '</pre></div>';
+      html += '</div></details>';
+    }
+    logsEl.innerHTML = html;
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  function fetchLogs() {
+    fetch(baseUrl + 'api/adyen/webhooks/logs', { method: 'GET' })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { renderLogs(data.logs || []); })
+      .catch(function () { logsEl.innerHTML = '<p class="adyen-logs-empty">Could not load webhook logs.</p>'; });
+  }
+
+  if (refreshBtn) refreshBtn.addEventListener('click', fetchLogs);
+  fetchLogs();
+})();
+</script>
+{% endblock %}

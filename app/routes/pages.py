@@ -66,3 +66,9 @@ def checkout_failed():
 def api_logs():
     """API Logs page: server-side Adyen API request/response logs."""
     return render_template("api_logs.html", title="API Logs")
+
+
+@pages_bp.route("/webhook-logs")
+def webhook_logs():
+    """Webhook Logs page: Adyen webhook events received and verified."""
+    return render_template("webhook_logs.html", title="Webhook Logs")
