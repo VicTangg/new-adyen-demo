@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block body_class %}checkout-page-body{% endblock %}
+
+{% block content %}
+<section class="checkout-page">
+  <h1 class="page-title">Xendit Checkout</h1>
+  <div class="checkout-layout">
+    <div class="checkout-cart">
+      <h2 class="checkout-subtitle">Your order</h2>
+      <ul class="cart-items">
+        {% for item in items %}
+        <li class="cart-item">
+          {% if item.image %}
+          <img class="cart-item-image" src="{{ url_for('static', filename=item.image) }}" alt="" width="48" height="48">
+          {% endif %}
+          <span class="cart-item-name">{{ item.name }}</span>
+          <span class="cart-item-qty">× {{ item.quantity }}</span>
+          <span class="cart-item-price">{{ "%.2f"|format(item.price_cents * item.quantity / 100) }} {{ currency }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="cart-total">
+        <strong>Total:</strong>
+        <span class="cart-total-amount">{{ "%.2f"|format(total_cents / 100) }} {{ currency }}</span>
+      </p>
+    </div>
+
+    <div class="checkout-payment">
+      <h2 class="checkout-subtitle">Payment</h2>
+      <div id="xendit-components-container"></div>
+      <button type="button" id="xendit-pay-btn" class="btn btn-primary" disabled>Pay with Card</button>
+      <p class="xendit-payment-divider">— or pay with —</p>
+      <div class="xendit-wallet-buttons">
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="GRABPAY">GrabPay</button>
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="ASTRAPAY">AstraPay</button>
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="DANA">DANA</button>
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="GCASH">GCash</button>
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="KRUNGSRI_DIRECT_DEBIT">Krungsri Direct Debit</button>
+        <button type="button" class="btn btn-secondary xendit-channel-btn" data-channel="KRUNGSRI_MOBILE_BANKING">Krungsri Mobile Banking</button>
+      </div>
+      <div id="xendit-error" class="adyen-error" role="alert" hidden></div>
+    </div>
+  </div>
+</section>
+
+<script src="https://assets.xendit.co/components/v0.0.12/index.umd.js"></script>
+<script>
+(function () {
+  const container = document.getElementById("xendit-components-container");
+  const payBtn = document.getElementById("xendit-pay-btn");
+  const errEl = document.getElementById("xendit-error");
+
+  function showError(msg) {
+    errEl.textContent = msg;
+    errEl.hidden = false;
+  }
+
+  function hideError() {
+    errEl.textContent = "";
+    errEl.hidden = true;
+  }
+
+  var successUrl = window.location.origin + "{{ url_for('pages.checkout_success') }}";
+  var failureUrl = window.location.origin + "{{ url_for('pages.checkout_failed') }}";
+
+  document.querySelectorAll(".xendit-channel-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var channel = this.getAttribute("data-channel");
+      var label = this.textContent;
+      this.disabled = true;
+      this.textContent = "Redirecting…";
+      fetch("/api/xendit/payment-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "1"
+        },
+        body: JSON.stringify({
+          channel_code: channel,
+          success_return_url: successUrl,
+          failure_return_url: failureUrl
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) {
+            showError(data.error);
+            btn.disabled = false;
+            btn.textContent = label;
+            return;
+          }
+          if (data.redirect_url) {
+            window.location.href = data.redirect_url;
+          } else {
+            showError("No redirect URL received");
+            btn.disabled = false;
+            btn.textContent = label;
+          }
+        })
+        .catch(function (e) {
+          showError(label + " error: " + (e.message || String(e)));
+          btn.disabled = false;
+          btn.textContent = label;
+        });
+    });
+  });
+
+  fetch("/api/xendit/sessions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "ngrok-skip-browser-warning": "1"
+    },
+    body: JSON.stringify({
+      amount: {{ total_cents }},
+      currency: "IDR",
+      country: "ID",
+      origin: window.location.origin,
+      customer_email: "customer@example.com",
+      customer_mobile: "+628123456789",
+      customer_given_names: "John",
+      customer_surname: "Doe",
+    }),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+      const sdkKey = data.components_sdk_key || data.componentsSdkKey;
+      if (!sdkKey) {
+        showError("No components_sdk_key in response");
+        return;
+      }
+
+      const XenditComponents = window.Xendit?.XenditComponents || window.XenditComponents || (window.xenditComponentsWeb && window.xenditComponentsWeb.XenditComponents);
+      if (!XenditComponents) {
+        showError("Xendit Components SDK not loaded");
+        return;
+      }
+
+      const components = new XenditComponents({ componentsSdkKey: sdkKey });
+
+      // createChannelPickerComponent is available before init; mount immediately so UI appears
+      const picker = components.createChannelPickerComponent();
+      container.replaceChildren(picker);
+
+      components.addEventListener("init", function () {
+        const channels = components.getActiveChannels();
+        if (!channels || channels.length === 0) {
+          container.innerHTML = "";
+          showError("No payment channels available. Activate CARDS in Xendit Dashboard: Payment Channels → Activate Payment Channels.");
+        }
+      });
+
+      components.addEventListener("submission-ready", function () { payBtn.disabled = false; });
+      components.addEventListener("submission-not-ready", function () { payBtn.disabled = true; });
+
+      payBtn.addEventListener("click", function () {
+        components.submit();
+      });
+
+      components.addEventListener("session-complete", function () {
+        window.location.href = "{{ url_for('pages.checkout_success') }}";
+      });
+
+      components.addEventListener("session-expired-or-canceled", function () {
+        showError("Payment was cancelled or expired.");
+      });
+    })
+    .catch(function (e) {
+      showError("Failed to create session: " + (e.message || String(e)));
+    });
+})();
+</script>
+{% endblock %}

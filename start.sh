@@ -11,5 +11,5 @@ if [[ ! -d .venv ]]; then
 fi
 
 # Activate venv and run the app (run.py loads .env via dotenv)
-source .venv/bin/activate
+source myenv/bin/activate
 exec python run.py

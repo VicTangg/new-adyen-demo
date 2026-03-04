@@ -72,3 +72,16 @@ def api_logs():
 def webhook_logs():
     """Webhook Logs page: Adyen webhook events received and verified."""
     return render_template("webhook_logs.html", title="Webhook Logs")
+
+
+@pages_bp.route("/xendit_checkout")
+def xendit_checkout():
+    """Xendit Components one-time payment checkout."""
+    total_cents = get_checkout_total_cents()
+    return render_template(
+        "xendit_checkout.html",
+        title="Xendit Checkout",
+        items=CHECKOUT_ITEMS,
+        total_cents=total_cents,
+        currency=CHECKOUT_CURRENCY,
+    )

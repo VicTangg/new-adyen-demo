@@ -377,6 +377,29 @@ body.api-logs-page-body .main {
   border: 1px solid var(--color-border);
 }
 
+#xendit-pay-btn {
+  margin-top: var(--space-md);
+}
+
+.xendit-payment-divider {
+  margin: var(--space-md) 0;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.xendit-wallet-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.xendit-wallet-buttons .btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
 .test-response-wrap {
   margin-bottom: var(--space-lg);
   padding: var(--space-md);
