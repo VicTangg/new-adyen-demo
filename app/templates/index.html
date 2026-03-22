@@ -5,6 +5,7 @@
   <h1 class="hero-title">Welcome</h1>
   <p class="hero-lead">This app uses <strong>Flask</strong> as the API server and <strong>Jinja2</strong> for server-side rendered pages.</p>
   <div class="hero-actions">
+    <a href="{{ url_for('static', filename='images/estee-lauder-festive-glow.png') }}" class="btn btn-secondary" target="_blank" rel="noopener">Estée Lauder promo (image)</a>
     <a href="{{ url_for('pages.checkout') }}" class="btn btn-primary">Checkout (Adyen)</a>
     <a href="{{ url_for('pages.about') }}" class="btn btn-secondary">About</a>
     <a href="{{ url_for('api.list_items') }}" class="btn btn-secondary" target="_blank" rel="noopener">View API (JSON)</a>
