@@ -91,6 +91,12 @@ def health():
     return jsonify({"status": "ok", "service": "flask-jinja2-app"})
 
 
+@api_bp.route("/hello", methods=["GET"])
+def hello():
+    """Simple hello world endpoint."""
+    return jsonify({"message": "Hello, World!"})
+
+
 @api_bp.route("/items", methods=["GET"])
 def list_items():
     """Example API: list items."""
