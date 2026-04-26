@@ -85,3 +85,9 @@ def xendit_checkout():
         total_cents=total_cents,
         currency=CHECKOUT_CURRENCY,
     )
+
+
+@pages_bp.route("/image-host")
+def image_host():
+    """Temporary image hosting page."""
+    return render_template("image_host.html", title="Image Host")

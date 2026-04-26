@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="checkout-page">
+  <h1 class="page-title">Image Host</h1>
+  <p class="checkout-subtitle">
+    Upload JPG/JPEG/PNG files, get a public link, and review all uploaded images.
+  </p>
+
+  <div class="checkout-card">
+    <form id="image-upload-form" enctype="multipart/form-data">
+      <div class="field-group">
+        <label for="image-file-input">Select image</label>
+        <input
+          id="image-file-input"
+          name="image"
+          type="file"
+          accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+          required
+        />
+      </div>
+      <div class="hero-actions">
+        <button type="submit" class="btn btn-primary">Upload image</button>
+        <button type="button" id="delete-all-images-btn" class="btn btn-secondary">Delete everything</button>
+      </div>
+    </form>
+    <div id="image-host-message" class="adyen-error" role="alert" hidden></div>
+  </div>
+
+  <div class="checkout-card">
+    <h2 class="checkout-subtitle">Uploaded Images</h2>
+    <p id="image-host-summary">Loading...</p>
+    <div id="uploaded-images-list"></div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const uploadForm = document.getElementById("image-upload-form");
+  const fileInput = document.getElementById("image-file-input");
+  const deleteAllBtn = document.getElementById("delete-all-images-btn");
+  const summaryEl = document.getElementById("image-host-summary");
+  const listEl = document.getElementById("uploaded-images-list");
+  const msgEl = document.getElementById("image-host-message");
+
+  function formatMb(bytes) {
+    return (bytes / (1024 * 1024)).toFixed(2) + " MB";
+  }
+
+  function showMessage(message, isError) {
+    msgEl.textContent = message;
+    msgEl.hidden = false;
+    msgEl.className = isError ? "adyen-error" : "adyen-status";
+  }
+
+  function hideMessage() {
+    msgEl.hidden = true;
+    msgEl.textContent = "";
+    msgEl.className = "adyen-error";
+  }
+
+  function renderImages(images, totalBytes) {
+    summaryEl.textContent = images.length + " file(s) stored, total " + formatMb(totalBytes) + ".";
+    if (!images.length) {
+      listEl.innerHTML = "<p>No uploaded images yet.</p>";
+      return;
+    }
+
+    listEl.innerHTML = images.map(function (img) {
+      const uploadedAt = new Date(img.uploaded_at).toLocaleString();
+      return [
+        "<article class='checkout-item'>",
+        "  <div class='checkout-item-info'>",
+        "    <p><strong>" + img.filename + "</strong></p>",
+        "    <p>Size: " + formatMb(img.size_bytes) + "</p>",
+        "    <p>Uploaded: " + uploadedAt + "</p>",
+        "    <p><a href='" + img.public_url + "' target='_blank' rel='noopener'>" + img.public_url + "</a></p>",
+        "  </div>",
+        "  <div class='checkout-item-thumb'>",
+        "    <a href='" + img.public_url + "' target='_blank' rel='noopener'>",
+        "      <img src='" + img.public_url + "' alt='" + img.filename + "' style='max-height:120px; max-width:160px; object-fit:cover;' />",
+        "    </a>",
+        "  </div>",
+        "</article>"
+      ].join("");
+    }).join("");
+  }
+
+  async function fetchImages() {
+    const resp = await fetch("/api/image-host/list");
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || "Could not load images.");
+    }
+    renderImages(data.images || [], data.total_size_bytes || 0);
+  }
+
+  async function uploadImage(file) {
+    const formData = new FormData();
+    formData.append("image", file);
+    const resp = await fetch("/api/image-host/upload", {
+      method: "POST",
+      body: formData
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || "Upload failed.");
+    }
+    return data;
+  }
+
+  async function deleteAllImages() {
+    const resp = await fetch("/api/image-host/delete-all", { method: "POST" });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.error || "Delete failed.");
+    }
+    return data;
+  }
+
+  uploadForm.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideMessage();
+    if (!fileInput.files || !fileInput.files.length) {
+      showMessage("Please choose an image file first.", true);
+      return;
+    }
+    try {
+      const result = await uploadImage(fileInput.files[0]);
+      showMessage("Uploaded successfully. Public link: " + result.public_url, false);
+      fileInput.value = "";
+      await fetchImages();
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  deleteAllBtn.addEventListener("click", async function () {
+    hideMessage();
+    const confirmed = window.confirm("Delete all uploaded images?");
+    if (!confirmed) return;
+    try {
+      const result = await deleteAllImages();
+      showMessage(result.message || "All images deleted.", false);
+      await fetchImages();
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  fetchImages().catch(function (err) {
+    showMessage(err.message, true);
+    summaryEl.textContent = "Failed to load images.";
+    listEl.innerHTML = "";
+  });
+})();
+</script>
+{% endblock %}

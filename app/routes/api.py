@@ -3,8 +3,10 @@ import copy
 import json
 import time
 import uuid
+from pathlib import Path
 import requests
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, url_for
+from werkzeug.utils import secure_filename
 
 api_bp = Blueprint("api", __name__)
 
@@ -19,6 +21,10 @@ ADYEN_WEBHOOK_LOGS_MAX = 100
 # In-memory store for Xendit API logs (bounded)
 XENDIT_API_LOGS = []
 XENDIT_API_LOGS_MAX = 50
+IMAGE_HOST_DIR_NAME = "uploads_tmp"
+IMAGE_HOST_MAX_BYTES = 100 * 1024 * 1024
+IMAGE_HOST_ALLOWED_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
+IMAGE_HOST_ALLOWED_MIME_TYPES = frozenset({"image/jpeg", "image/png"})
 SENSITIVE_KEYS = frozenset({
     "encryptedCardNumber", "encryptedSecurityCode", "encryptedExpiryMonth", "encryptedExpiryYear",
     "encryptedPassword", "cvc", "number",
@@ -75,6 +81,41 @@ def _append_xendit_log(endpoint, request_payload, response_payload, error=None):
         XENDIT_API_LOGS.pop(0)
 
 
+def _image_host_dir():
+    path = Path(current_app.static_folder) / IMAGE_HOST_DIR_NAME
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _image_host_total_size_bytes():
+    total = 0
+    for path in _image_host_dir().iterdir():
+        if path.is_file():
+            total += path.stat().st_size
+    return total
+
+
+def _image_host_purge_all():
+    removed = 0
+    for path in _image_host_dir().iterdir():
+        if path.is_file():
+            path.unlink(missing_ok=True)
+            removed += 1
+    return removed
+
+
+def _image_public_url(filename):
+    return request.url_root.rstrip("/") + url_for("static", filename=f"{IMAGE_HOST_DIR_NAME}/{filename}")
+
+
+def _image_host_purge_if_over_limit():
+    total_bytes = _image_host_total_size_bytes()
+    if total_bytes > IMAGE_HOST_MAX_BYTES:
+        _image_host_purge_all()
+        return True
+    return False
+
+
 def get_adyen_client():
     """Return configured Adyen checkout client."""
     from Adyen import Adyen
@@ -100,6 +141,74 @@ def list_items():
         {"id": 3, "name": "Item Gamma", "description": "Third sample item"},
     ]
     return jsonify({"items": items, "count": len(items)})
+
+
+@api_bp.route("/image-host/list", methods=["GET"])
+def image_host_list():
+    """List all uploaded images with public URLs."""
+    _image_host_purge_if_over_limit()
+    images = []
+    total_size = 0
+    for path in _image_host_dir().iterdir():
+        if not path.is_file():
+            continue
+        ext = path.suffix.lower().lstrip(".")
+        if ext not in IMAGE_HOST_ALLOWED_EXTENSIONS:
+            continue
+        stat = path.stat()
+        total_size += stat.st_size
+        images.append({
+            "filename": path.name,
+            "size_bytes": stat.st_size,
+            "uploaded_at": int(stat.st_mtime * 1000),
+            "public_url": _image_public_url(path.name),
+        })
+
+    images.sort(key=lambda img: img["uploaded_at"], reverse=True)
+    return jsonify({"images": images, "total_size_bytes": total_size, "max_size_bytes": IMAGE_HOST_MAX_BYTES})
+
+
+@api_bp.route("/image-host/upload", methods=["POST"])
+def image_host_upload():
+    """Upload JPEG/PNG to temporary static storage and return public link."""
+    _image_host_purge_if_over_limit()
+    image = request.files.get("image")
+    if not image or not image.filename:
+        return jsonify({"error": "image file is required"}), 400
+
+    original_filename = secure_filename(image.filename)
+    if "." not in original_filename:
+        return jsonify({"error": "file extension is required"}), 400
+
+    ext = original_filename.rsplit(".", 1)[-1].lower()
+    if ext not in IMAGE_HOST_ALLOWED_EXTENSIONS:
+        return jsonify({"error": "only JPG, JPEG, and PNG files are allowed"}), 400
+
+    if image.mimetype not in IMAGE_HOST_ALLOWED_MIME_TYPES:
+        return jsonify({"error": "unsupported image MIME type"}), 400
+
+    stored_name = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}.{ext}"
+    file_path = _image_host_dir() / stored_name
+    image.save(file_path)
+
+    # Enforce hard storage cap by wiping all files once exceeded.
+    if _image_host_purge_if_over_limit():
+        return jsonify({
+            "error": "stored files exceeded 100 MB, so all uploaded images were deleted"
+        }), 507
+
+    return jsonify({
+        "filename": stored_name,
+        "public_url": _image_public_url(stored_name),
+        "size_bytes": file_path.stat().st_size,
+    }), 201
+
+
+@api_bp.route("/image-host/delete-all", methods=["POST"])
+def image_host_delete_all():
+    """Delete all temporary hosted images."""
+    removed_count = _image_host_purge_all()
+    return jsonify({"message": "All uploaded images deleted", "removed_count": removed_count})
 
 
 # ——— Adyen Checkout (Advanced flow) ———
