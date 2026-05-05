@@ -28,10 +28,12 @@ ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
 HMAC_SECRET=your_webhook_hmac_key
+ADYEN_MANAGEMENT_ADMIN_TOKEN=your_random_admin_token
 ```
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
+- **ADYEN_MANAGEMENT_ADMIN_TOKEN**: Required for server-side Adyen Management PATCH endpoints. Leave unset to disable Management updates.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
 
