@@ -27,6 +27,7 @@ ADYEN_API_KEY=your_adyen_api_key
 ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
+ADYEN_MANAGEMENT_API_TOKEN=generate-a-long-random-token
 HMAC_SECRET=your_webhook_hmac_key
 ```
 
@@ -34,6 +35,7 @@ HMAC_SECRET=your_webhook_hmac_key
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
+- **ADYEN_MANAGEMENT_API_TOKEN**: required for Adyen Management `PATCH` routes. Send it as `X-Admin-Token` or an `Authorization: Bearer ...` token when intentionally changing store or split configuration.
 
 ## Run
 
@@ -59,7 +61,7 @@ Then open:
 - **Checkout page** shows a cart of 2 items and the total; the Adyen Drop-in is initialized with that amount (Advanced flow).
 - **Payment methods** are loaded via `POST /api/adyen/paymentMethods`; payment is submitted via `POST /api/adyen/payments`; 3DS or redirect details are sent to `POST /api/adyen/payments/details`.
 - **Redirect flow** (e.g. iDEAL, 3DS redirect): after the shopper returns to `/checkout/return`, the page completes the payment with `payments/details` and redirects to success or failed.
-- **Store & split configuration**: Select a store to pay to; view store details and edit `splitConfiguration`. Click `splitConfigurationId` to open a popup with the split configuration profile; each rule can be edited (conditions via [PATCH rules](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)), split logic via [PATCH splitLogic](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)/splitLogic/(splitLogicId))).
+- **Store & split configuration**: Select a store to pay to and view store details. Management edits require `ADYEN_MANAGEMENT_API_TOKEN`; include it as `X-Admin-Token` or a bearer token when calling the `PATCH` endpoints intentionally.
 
 ## Webhooks
 
