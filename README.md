@@ -27,6 +27,8 @@ ADYEN_API_KEY=your_adyen_api_key
 ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
+# Optional: required for Adyen Management write endpoints. Leave unset to disable writes.
+ADYEN_MANAGEMENT_WRITE_TOKEN=generate-a-long-random-token
 HMAC_SECRET=your_webhook_hmac_key
 ```
 
@@ -59,7 +61,7 @@ Then open:
 - **Checkout page** shows a cart of 2 items and the total; the Adyen Drop-in is initialized with that amount (Advanced flow).
 - **Payment methods** are loaded via `POST /api/adyen/paymentMethods`; payment is submitted via `POST /api/adyen/payments`; 3DS or redirect details are sent to `POST /api/adyen/payments/details`.
 - **Redirect flow** (e.g. iDEAL, 3DS redirect): after the shopper returns to `/checkout/return`, the page completes the payment with `payments/details` and redirects to success or failed.
-- **Store & split configuration**: Select a store to pay to; view store details and edit `splitConfiguration`. Click `splitConfigurationId` to open a popup with the split configuration profile; each rule can be edited (conditions via [PATCH rules](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)), split logic via [PATCH splitLogic](https://docs.adyen.com/api-explorer/Management/3/patch/merchants/(merchantId)/splitConfigurations/(splitConfigurationId)/rules/(ruleId)/splitLogic/(splitLogicId))).
+- **Store & split configuration**: Select a store to pay to and view store details. Write endpoints for editing store/split configuration are disabled unless `ADYEN_MANAGEMENT_WRITE_TOKEN` is set and the request includes it in `X-Management-Write-Token` or `Authorization: Bearer ...`.
 
 ## Webhooks
 
@@ -82,10 +84,10 @@ The endpoint verifies the HMAC signature using [Adyen's Python library](https://
 | POST | `/api/adyen/payments/details` | Adyen: submit details (e.g. after 3DS) |
 | GET | `/api/adyen/stores` | Adyen Management: list stores |
 | GET | `/api/adyen/stores/<store_id>` | Adyen Management: get store details |
-| PATCH | `/api/adyen/stores/<store_id>` | Adyen Management: update store (e.g. splitConfiguration) |
+| PATCH | `/api/adyen/stores/<store_id>` | Adyen Management: update store (requires `ADYEN_MANAGEMENT_WRITE_TOKEN`) |
 | GET | `/api/adyen/splitConfigurations/<id>` | Adyen Management: get split configuration profile |
-| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (currency, fundingSource, paymentMethod, shopperInteraction) |
-| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (commission, paymentFee, refund, chargeback, etc.) |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (requires `ADYEN_MANAGEMENT_WRITE_TOKEN`) |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (requires `ADYEN_MANAGEMENT_WRITE_TOKEN`) |
 | POST | `/api/adyen/webhooks` | Adyen Standard webhook endpoint (HMAC verification required; accepts only valid signatures) |
 | GET | `/api/adyen/webhooks/logs` | Webhook events received (for dev UI) |
 
