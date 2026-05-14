@@ -23,15 +23,31 @@ class AdyenManagementAuthTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.get_json()["error"], "Adyen Management API token not configured")
 
+    @patch("app.routes.api.requests.patch")
     @patch("app.routes.api.requests.get")
-    def test_management_route_rejects_missing_token_before_proxying(self, mock_get):
+    def test_all_management_routes_reject_missing_token_before_proxying(self, mock_get, mock_patch):
         client = self.create_client()
 
-        response = client.get("/api/adyen/stores")
+        cases = [
+            ("GET", "/api/adyen/stores", None),
+            ("GET", "/api/adyen/stores/store-1", None),
+            ("PATCH", "/api/adyen/stores/store-1", {"splitConfiguration": {"splitConfigurationId": "spc_1"}}),
+            ("GET", "/api/adyen/splitConfigurations/spc_1", None),
+            ("PATCH", "/api/adyen/splitConfigurations/spc_1/rules/rule-1", {"currency": "EUR"}),
+            (
+                "PATCH",
+                "/api/adyen/splitConfigurations/spc_1/rules/rule-1/splitLogic/spl_1",
+                {"commission": {"fixedAmount": 0}},
+            ),
+        ]
 
-        self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.get_json()["error"], "Unauthorized")
+        for method, path, payload in cases:
+            with self.subTest(method=method, path=path):
+                response = client.open(path, method=method, json=payload)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(response.get_json()["error"], "Unauthorized")
         mock_get.assert_not_called()
+        mock_patch.assert_not_called()
 
     @patch("app.routes.api.requests.patch")
     def test_management_write_route_rejects_bad_token_before_proxying(self, mock_patch):
