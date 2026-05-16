@@ -190,6 +190,20 @@
     var storeDetailsEl = document.getElementById('store-details');
     var currentStoreId = null;
     var currentStore = null;
+    function getManagementWriteHeaders() {
+      var token = '';
+      try {
+        token = sessionStorage.getItem('adyenManagementWriteToken') || '';
+      } catch (e) { }
+      if (!token) {
+        token = window.prompt('Enter Adyen Management write token');
+        if (!token) return null;
+        try {
+          sessionStorage.setItem('adyenManagementWriteToken', token);
+        } catch (e) { }
+      }
+      return { 'Content-Type': 'application/json', 'X-Adyen-Management-Write-Token': token };
+    }
     function fmt(val) { return val == null || val === '' ? '—' : String(val); }
     function fmtObj(obj) {
       if (obj == null) return '—';
@@ -288,9 +302,14 @@
             if (splitConfigurationId) payload.splitConfiguration.splitConfigurationId = splitConfigurationId;
           }
           if (!currentStoreId) return;
+          var headers = getManagementWriteHeaders();
+          if (!headers) {
+            renderStoreDetails({ error: 'Adyen Management write token required' }, currentStoreId);
+            return;
+          }
           fetch(baseUrl + 'api/adyen/stores/' + encodeURIComponent(currentStoreId), {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(payload)
           }).then(function (r) { return r.json(); }).then(function (res) {
             if (res.error) {
@@ -497,8 +516,10 @@
         };
         var cardRegion = (condForm.querySelector('[name=cardRegion]') || {}).value;
         if (cardRegion) payload.cardRegion = cardRegion;
+        var headers = getManagementWriteHeaders();
+        if (!headers) { alert('Adyen Management write token required'); return; }
         fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId) + '/rules/' + encodeURIComponent(ruleId), {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          method: 'PATCH', headers: headers, body: JSON.stringify(payload)
         }).then(function (r) { return r.json(); }).then(function (res) {
           if (res.error) { alert(res.error); return; }
           condForm.style.display = 'none';
@@ -536,8 +557,10 @@
         if (rem) payload.remainder = rem;
         if (!payload.commission && Object.keys(payload).length === 0) { alert('commission (fixedAmount or variablePercentage) required'); return; }
         if (!payload.commission) payload.commission = { fixedAmount: 0 };
+        var headers = getManagementWriteHeaders();
+        if (!headers) { alert('Adyen Management write token required'); return; }
         fetch(baseUrl + 'api/adyen/splitConfigurations/' + encodeURIComponent(splitId) + '/rules/' + encodeURIComponent(ruleId) + '/splitLogic/' + encodeURIComponent(splitLogicId), {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          method: 'PATCH', headers: headers, body: JSON.stringify(payload)
         }).then(function (r) { return r.json(); }).then(function (res) {
           if (res.error) { alert(res.error); return; }
           logicForm.style.display = 'none';
