@@ -1,5 +1,6 @@
 """API blueprint — JSON endpoints."""
 import copy
+import hmac
 import json
 import time
 import uuid
@@ -124,6 +125,23 @@ def get_adyen_client():
     adyen.client.platform = current_app.config["ADYEN_ENVIRONMENT"]
     adyen.client.merchant_account = current_app.config["ADYEN_MERCHANT_ACCOUNT"]
     return adyen
+
+
+def _adyen_management_write_auth_error():
+    """Return a Flask response tuple when Management API write access is not authorized."""
+    required_token = current_app.config.get("ADYEN_MANAGEMENT_WRITE_TOKEN", "").strip()
+    if not required_token:
+        return jsonify({"error": "Adyen Management writes are disabled"}), 403
+
+    supplied_token = request.headers.get("X-Adyen-Management-Write-Token", "").strip()
+    authorization = request.headers.get("Authorization", "")
+    if authorization.lower().startswith("bearer "):
+        supplied_token = authorization[7:].strip()
+
+    if not supplied_token or not hmac.compare_digest(supplied_token, required_token):
+        return jsonify({"error": "Adyen Management write token required"}), 401
+
+    return None
 
 
 @api_bp.route("/health", methods=["GET"])
@@ -447,6 +465,10 @@ def adyen_store_detail(store_id):
 @api_bp.route("/adyen/stores/<store_id>", methods=["PATCH"])
 def adyen_store_update(store_id):
     """Update a store via Adyen Management API PATCH /merchants/{merchantId}/stores/{storeId}."""
+    auth_error = _adyen_management_write_auth_error()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -509,6 +531,10 @@ def adyen_split_configuration(split_configuration_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>", methods=["PATCH"])
 def adyen_split_rule_update(split_configuration_id, rule_id):
     """Update split conditions via PATCH /merchants/{merchantId}/splitConfigurations/{splitConfigurationId}/rules/{ruleId}."""
+    auth_error = _adyen_management_write_auth_error()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -542,6 +568,10 @@ def adyen_split_rule_update(split_configuration_id, rule_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>/splitLogic/<split_logic_id>", methods=["PATCH"])
 def adyen_split_logic_update(split_configuration_id, rule_id, split_logic_id):
     """Update split logic via PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId}/splitLogic/{splitLogicId}."""
+    auth_error = _adyen_management_write_auth_error()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
