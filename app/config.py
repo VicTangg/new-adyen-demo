@@ -19,6 +19,7 @@ class DefaultConfig:
     ADYEN_CLIENT_KEY = os.environ.get("ADYEN_CLIENT_KEY", "")
     ADYEN_MERCHANT_ACCOUNT = os.environ.get("ADYEN_MERCHANT_ACCOUNT", "")
     ADYEN_ENVIRONMENT = os.environ.get("ADYEN_ENVIRONMENT", "test")  # test or live
+    ADYEN_MANAGEMENT_WRITE_TOKEN = os.environ.get("ADYEN_MANAGEMENT_WRITE_TOKEN", "")
     HMAC_SECRET = os.environ.get("HMAC_SECRET", "")  # Webhook HMAC key from Customer Area
 
     # Xendit (Payment Sessions / Components)
