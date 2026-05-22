@@ -28,10 +28,14 @@ ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
 HMAC_SECRET=your_webhook_hmac_key
+ADYEN_MANAGEMENT_WRITE_TOKEN=generate_a_long_random_token
+IMAGE_HOST_DELETE_TOKEN=generate_a_long_random_token
 ```
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
+- **ADYEN_MANAGEMENT_WRITE_TOKEN**: Required for Management API write endpoints. Send it as `Authorization: Bearer <token>` or `X-Adyen-Management-Write-Token`.
+- **IMAGE_HOST_DELETE_TOKEN**: Required for the image-host delete-all endpoint. Send it as `Authorization: Bearer <token>` or `X-Image-Host-Delete-Token`.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
 
@@ -82,10 +86,10 @@ The endpoint verifies the HMAC signature using [Adyen's Python library](https://
 | POST | `/api/adyen/payments/details` | Adyen: submit details (e.g. after 3DS) |
 | GET | `/api/adyen/stores` | Adyen Management: list stores |
 | GET | `/api/adyen/stores/<store_id>` | Adyen Management: get store details |
-| PATCH | `/api/adyen/stores/<store_id>` | Adyen Management: update store (e.g. splitConfiguration) |
+| PATCH | `/api/adyen/stores/<store_id>` | Adyen Management: update store (requires write token) |
 | GET | `/api/adyen/splitConfigurations/<id>` | Adyen Management: get split configuration profile |
-| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (currency, fundingSource, paymentMethod, shopperInteraction) |
-| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (commission, paymentFee, refund, chargeback, etc.) |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>` | Adyen Management: update split conditions (requires write token) |
+| PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (requires write token) |
 | POST | `/api/adyen/webhooks` | Adyen Standard webhook endpoint (HMAC verification required; accepts only valid signatures) |
 | GET | `/api/adyen/webhooks/logs` | Webhook events received (for dev UI) |
 
