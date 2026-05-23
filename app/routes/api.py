@@ -1,5 +1,6 @@
 """API blueprint — JSON endpoints."""
 import copy
+import hmac
 import json
 import time
 import uuid
@@ -108,12 +109,39 @@ def _image_public_url(filename):
     return request.url_root.rstrip("/") + url_for("static", filename=f"{IMAGE_HOST_DIR_NAME}/{filename}")
 
 
-def _image_host_purge_if_over_limit():
-    total_bytes = _image_host_total_size_bytes()
-    if total_bytes > IMAGE_HOST_MAX_BYTES:
-        _image_host_purge_all()
-        return True
-    return False
+def _request_auth_token(header_name):
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return (request.headers.get(header_name) or "").strip()
+
+
+def _require_configured_token(config_key, header_name, label):
+    expected = (current_app.config.get(config_key) or "").strip()
+    if not expected:
+        return jsonify({"error": f"{label} token not configured"}), 503
+
+    supplied = _request_auth_token(header_name)
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        return jsonify({"error": "Forbidden"}), 403
+
+    return None
+
+
+def _require_image_delete_token():
+    return _require_configured_token(
+        "IMAGE_HOST_DELETE_TOKEN",
+        "X-Image-Host-Delete-Token",
+        "Image host delete",
+    )
+
+
+def _require_adyen_management_write_token():
+    return _require_configured_token(
+        "ADYEN_MANAGEMENT_WRITE_TOKEN",
+        "X-Adyen-Management-Write-Token",
+        "Adyen management write",
+    )
 
 
 def get_adyen_client():
@@ -146,7 +174,6 @@ def list_items():
 @api_bp.route("/image-host/list", methods=["GET"])
 def image_host_list():
     """List all uploaded images with public URLs."""
-    _image_host_purge_if_over_limit()
     images = []
     total_size = 0
     for path in _image_host_dir().iterdir():
@@ -171,7 +198,6 @@ def image_host_list():
 @api_bp.route("/image-host/upload", methods=["POST"])
 def image_host_upload():
     """Upload JPEG/PNG to temporary static storage and return public link."""
-    _image_host_purge_if_over_limit()
     image = request.files.get("image")
     if not image or not image.filename:
         return jsonify({"error": "image file is required"}), 400
@@ -191,10 +217,11 @@ def image_host_upload():
     file_path = _image_host_dir() / stored_name
     image.save(file_path)
 
-    # Enforce hard storage cap by wiping all files once exceeded.
-    if _image_host_purge_if_over_limit():
+    # Enforce the storage cap without deleting previously uploaded images.
+    if _image_host_total_size_bytes() > IMAGE_HOST_MAX_BYTES:
+        file_path.unlink(missing_ok=True)
         return jsonify({
-            "error": "stored files exceeded 100 MB, so all uploaded images were deleted"
+            "error": "stored files would exceed the 100 MB limit; upload was rejected"
         }), 507
 
     return jsonify({
@@ -207,6 +234,10 @@ def image_host_upload():
 @api_bp.route("/image-host/delete-all", methods=["POST"])
 def image_host_delete_all():
     """Delete all temporary hosted images."""
+    auth_error = _require_image_delete_token()
+    if auth_error:
+        return auth_error
+
     removed_count = _image_host_purge_all()
     return jsonify({"message": "All uploaded images deleted", "removed_count": removed_count})
 
@@ -447,6 +478,10 @@ def adyen_store_detail(store_id):
 @api_bp.route("/adyen/stores/<store_id>", methods=["PATCH"])
 def adyen_store_update(store_id):
     """Update a store via Adyen Management API PATCH /merchants/{merchantId}/stores/{storeId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -509,6 +544,10 @@ def adyen_split_configuration(split_configuration_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>", methods=["PATCH"])
 def adyen_split_rule_update(split_configuration_id, rule_id):
     """Update split conditions via PATCH /merchants/{merchantId}/splitConfigurations/{splitConfigurationId}/rules/{ruleId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -542,6 +581,10 @@ def adyen_split_rule_update(split_configuration_id, rule_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>/splitLogic/<split_logic_id>", methods=["PATCH"])
 def adyen_split_logic_update(split_configuration_id, rule_id, split_logic_id):
     """Update split logic via PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId}/splitLogic/{splitLogicId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")

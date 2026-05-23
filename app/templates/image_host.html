@@ -112,7 +112,14 @@
   }
 
   async function deleteAllImages() {
-    const resp = await fetch("/api/image-host/delete-all", { method: "POST" });
+    const token = window.prompt("Enter image host delete token") || "";
+    if (!token) {
+      throw new Error("Image host delete token required.");
+    }
+    const resp = await fetch("/api/image-host/delete-all", {
+      method: "POST",
+      headers: { "X-Image-Host-Delete-Token": token }
+    });
     const data = await resp.json();
     if (!resp.ok) {
       throw new Error(data.error || "Delete failed.");

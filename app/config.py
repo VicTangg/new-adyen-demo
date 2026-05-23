@@ -20,9 +20,13 @@ class DefaultConfig:
     ADYEN_MERCHANT_ACCOUNT = os.environ.get("ADYEN_MERCHANT_ACCOUNT", "")
     ADYEN_ENVIRONMENT = os.environ.get("ADYEN_ENVIRONMENT", "test")  # test or live
     HMAC_SECRET = os.environ.get("HMAC_SECRET", "")  # Webhook HMAC key from Customer Area
+    ADYEN_MANAGEMENT_WRITE_TOKEN = os.environ.get("ADYEN_MANAGEMENT_WRITE_TOKEN", "")
 
     # Xendit (Payment Sessions / Components)
     XENDIT_SECRET_KEY = os.environ.get("XENDIT_SECRET_KEY", "")
     XENDIT_PUBLIC_KEY = os.environ.get("XENDIT_PUBLIC_KEY", "")
     # Thailand mobile banking / direct debit: business ID from Xendit Dashboard (Settings → Business)
     XENDIT_DESTINATION_ACCOUNT_ID = os.environ.get("XENDIT_DESTINATION_ACCOUNT_ID", "")
+
+    # Image host destructive operations
+    IMAGE_HOST_DELETE_TOKEN = os.environ.get("IMAGE_HOST_DELETE_TOKEN", "")
