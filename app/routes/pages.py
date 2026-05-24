@@ -9,6 +9,9 @@ CHECKOUT_ITEMS = [
     {"id": "2", "name": "USB-C Hub", "price_cents": 3499, "quantity": 1, "image": "images/hub.svg"},
 ]
 CHECKOUT_CURRENCY = "EUR"
+XENDIT_SESSION_AMOUNT = 50000
+XENDIT_SESSION_CURRENCY = "IDR"
+XENDIT_SESSION_COUNTRY = "ID"
 
 
 def get_checkout_total_cents():
@@ -77,13 +80,13 @@ def webhook_logs():
 @pages_bp.route("/xendit_checkout")
 def xendit_checkout():
     """Xendit Components one-time payment checkout."""
-    total_cents = get_checkout_total_cents()
     return render_template(
         "xendit_checkout.html",
         title="Xendit Checkout",
         items=CHECKOUT_ITEMS,
-        total_cents=total_cents,
-        currency=CHECKOUT_CURRENCY,
+        total_cents=XENDIT_SESSION_AMOUNT,
+        currency=XENDIT_SESSION_CURRENCY,
+        xendit_country=XENDIT_SESSION_COUNTRY,
     )
 
 

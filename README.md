@@ -27,6 +27,7 @@ ADYEN_API_KEY=your_adyen_api_key
 ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
+ADYEN_MANAGEMENT_WRITE_TOKEN=generate-a-long-random-token
 HMAC_SECRET=your_webhook_hmac_key
 ```
 
@@ -34,6 +35,7 @@ HMAC_SECRET=your_webhook_hmac_key
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
+- Management API `PATCH` endpoints require `ADYEN_MANAGEMENT_WRITE_TOKEN` as either a bearer token or `X-Adyen-Management-Write-Token`.
 
 ## Run
 
@@ -88,6 +90,8 @@ The endpoint verifies the HMAC signature using [Adyen's Python library](https://
 | PATCH | `/api/adyen/splitConfigurations/<id>/rules/<rule_id>/splitLogic/<split_logic_id>` | Adyen Management: update split logic (commission, paymentFee, refund, chargeback, etc.) |
 | POST | `/api/adyen/webhooks` | Adyen Standard webhook endpoint (HMAC verification required; accepts only valid signatures) |
 | GET | `/api/adyen/webhooks/logs` | Webhook events received (for dev UI) |
+
+Destructive image-host deletion requires `IMAGE_HOST_DELETE_TOKEN` as either a bearer token or `X-Image-Host-Delete-Token`.
 
 ## Pages
 
