@@ -61,6 +61,15 @@
     msgEl.className = "adyen-error";
   }
 
+  function getDeleteHeaders() {
+    let token = sessionStorage.getItem("imageHostDeleteToken") || "";
+    if (!token) {
+      token = window.prompt("Enter image host delete token") || "";
+      if (token) sessionStorage.setItem("imageHostDeleteToken", token);
+    }
+    return token ? { "X-Image-Host-Delete-Token": token } : {};
+  }
+
   function renderImages(images, totalBytes) {
     summaryEl.textContent = images.length + " file(s) stored, total " + formatMb(totalBytes) + ".";
     if (!images.length) {
@@ -112,7 +121,10 @@
   }
 
   async function deleteAllImages() {
-    const resp = await fetch("/api/image-host/delete-all", { method: "POST" });
+    const resp = await fetch("/api/image-host/delete-all", {
+      method: "POST",
+      headers: getDeleteHeaders()
+    });
     const data = await resp.json();
     if (!resp.ok) {
       throw new Error(data.error || "Delete failed.");
