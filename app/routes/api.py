@@ -1,5 +1,6 @@
 """API blueprint — JSON endpoints."""
 import copy
+import hmac
 import json
 import time
 import uuid
@@ -25,6 +26,8 @@ IMAGE_HOST_DIR_NAME = "uploads_tmp"
 IMAGE_HOST_MAX_BYTES = 100 * 1024 * 1024
 IMAGE_HOST_ALLOWED_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
 IMAGE_HOST_ALLOWED_MIME_TYPES = frozenset({"image/jpeg", "image/png"})
+XENDIT_DEFAULT_COMPONENTS_CURRENCY = "IDR"
+XENDIT_DEFAULT_COMPONENTS_COUNTRY = "ID"
 SENSITIVE_KEYS = frozenset({
     "encryptedCardNumber", "encryptedSecurityCode", "encryptedExpiryMonth", "encryptedExpiryYear",
     "encryptedPassword", "cvc", "number",
@@ -116,6 +119,58 @@ def _image_host_purge_if_over_limit():
     return False
 
 
+def _bearer_or_header_token(header_name):
+    auth_header = request.headers.get("Authorization", "").strip()
+    bearer = ""
+    if auth_header.lower().startswith("bearer "):
+        bearer = auth_header[7:].strip()
+    return (request.headers.get(header_name, "") or bearer).strip()
+
+
+def _require_configured_token(config_key, header_name):
+    expected = (current_app.config.get(config_key) or "").strip()
+    if not expected:
+        return jsonify({"error": f"{config_key} is not configured"}), 503
+
+    supplied = _bearer_or_header_token(header_name)
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
+
+
+def _require_image_host_delete_token():
+    return _require_configured_token("IMAGE_HOST_DELETE_TOKEN", "X-Image-Host-Delete-Token")
+
+
+def _require_adyen_management_write_token():
+    return _require_configured_token("ADYEN_MANAGEMENT_WRITE_TOKEN", "X-Adyen-Management-Write-Token")
+
+
+def _force_https_url(url):
+    if url.startswith("http://"):
+        return "https://" + url[len("http://"):]
+    return url
+
+
+def _public_base_url():
+    configured = (current_app.config.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    base = configured or request.url_root.rstrip("/")
+    return _force_https_url(base)
+
+
+def _xendit_allowed_origins():
+    configured = current_app.config.get("XENDIT_ALLOWED_ORIGINS") or ""
+    origins = [_public_base_url()]
+    origins.extend(origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip())
+    origins.append("https://localhost:5001")
+    origins.append("https://new-adyen-demo-377583b87f3c.herokuapp.com")
+    return list(dict.fromkeys(_force_https_url(origin) for origin in origins if origin))
+
+
+def _checkout_return_url(endpoint):
+    return f"{_public_base_url()}{url_for(endpoint)}"
+
+
 def get_adyen_client():
     """Return configured Adyen checkout client."""
     from Adyen import Adyen
@@ -191,10 +246,11 @@ def image_host_upload():
     file_path = _image_host_dir() / stored_name
     image.save(file_path)
 
-    # Enforce hard storage cap by wiping all files once exceeded.
-    if _image_host_purge_if_over_limit():
+    # Reject the new file without deleting previously hosted images.
+    if _image_host_total_size_bytes() > IMAGE_HOST_MAX_BYTES:
+        file_path.unlink(missing_ok=True)
         return jsonify({
-            "error": "stored files exceeded 100 MB, so all uploaded images were deleted"
+            "error": "upload would exceed the 100 MB storage limit"
         }), 507
 
     return jsonify({
@@ -207,6 +263,10 @@ def image_host_upload():
 @api_bp.route("/image-host/delete-all", methods=["POST"])
 def image_host_delete_all():
     """Delete all temporary hosted images."""
+    auth_error = _require_image_host_delete_token()
+    if auth_error:
+        return auth_error
+
     removed_count = _image_host_purge_all()
     return jsonify({"message": "All uploaded images deleted", "removed_count": removed_count})
 
@@ -447,6 +507,10 @@ def adyen_store_detail(store_id):
 @api_bp.route("/adyen/stores/<store_id>", methods=["PATCH"])
 def adyen_store_update(store_id):
     """Update a store via Adyen Management API PATCH /merchants/{merchantId}/stores/{storeId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -509,6 +573,10 @@ def adyen_split_configuration(split_configuration_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>", methods=["PATCH"])
 def adyen_split_rule_update(split_configuration_id, rule_id):
     """Update split conditions via PATCH /merchants/{merchantId}/splitConfigurations/{splitConfigurationId}/rules/{ruleId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -542,6 +610,10 @@ def adyen_split_rule_update(split_configuration_id, rule_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>/splitLogic/<split_logic_id>", methods=["PATCH"])
 def adyen_split_logic_update(split_configuration_id, rule_id, split_logic_id):
     """Update split logic via PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId}/splitLogic/{splitLogicId}."""
+    auth_error = _require_adyen_management_write_token()
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -582,25 +654,15 @@ def xendit_create_session():
         return jsonify({"error": "Xendit not configured"}), 503
 
     data = request.get_json() or {}
-    amount = data.get("amount")
-    currency = data.get("currency", "IDR")
-    country = data.get("country", "ID")
+    from app.routes.pages import get_checkout_total_cents
 
-    if amount is None:
-        from app.routes.pages import get_checkout_total_cents
-        amount = get_checkout_total_cents()
+    amount = get_checkout_total_cents()
+    currency = current_app.config.get("XENDIT_COMPONENTS_CURRENCY") or XENDIT_DEFAULT_COMPONENTS_CURRENCY
+    country = current_app.config.get("XENDIT_COMPONENTS_COUNTRY") or XENDIT_DEFAULT_COMPONENTS_COUNTRY
 
     ref_id = f"xendit-{uuid.uuid4().hex[:16]}"
     cust_ref = str(uuid.uuid4())
 
-    # Xendit requires HTTPS for origins; prefer client-provided origin (handles ngrok, etc.)
-    client_origin = (data.get("origin") or "").strip()
-    if client_origin and not client_origin.startswith("https://"):
-        client_origin = client_origin.replace("http://", "https://", 1)
-    base_url = request.url_root.rstrip("/")
-    base_https = base_url if base_url.startswith("https://") else base_url.replace("http://", "https://", 1)
-    origins = [o for o in [client_origin, base_https, "https://localhost:5001", "https://new-adyen-demo-377583b87f3c.herokuapp.com"] if o]
-    origins = list(dict.fromkeys(origins))
     payload = {
         "reference_id": ref_id,
         "session_type": "PAY",
@@ -619,7 +681,7 @@ def xendit_create_session():
             },
         },
         "components_configuration": {
-            "origins": origins,
+            "origins": _xendit_allowed_origins(),
         },
     }
 
@@ -765,12 +827,11 @@ def xendit_payment_request():
     if not channel_code:
         return jsonify({"error": "channel_code required"}), 400
 
-    base_url = request.url_root.rstrip("/")
-    success_url = data.get("success_return_url") or f"{base_url}/checkout/success"
-    failure_url = data.get("failure_return_url") or f"{base_url}/checkout/failed"
+    success_url = _checkout_return_url("pages.checkout_success")
+    failure_url = _checkout_return_url("pages.checkout_failed")
 
     result, err = _do_xendit_payment_request(
-        channel_code, data.get("amount"), success_url, failure_url
+        channel_code, None, success_url, failure_url
     )
     if err:
         return err[0], err[1]
@@ -781,11 +842,9 @@ def xendit_payment_request():
 @api_bp.route("/xendit/payment-grabpay", methods=["POST"])
 def xendit_payment_grabpay():
     """Legacy: Create GrabPay payment. Prefer POST /xendit/payment-request with channel_code=GRABPAY."""
-    data = request.get_json() or {}
-    base_url = request.url_root.rstrip("/")
-    success_url = data.get("success_return_url") or f"{base_url}/checkout/success"
-    failure_url = data.get("failure_return_url") or f"{base_url}/checkout/failed"
-    result, err = _do_xendit_payment_request("GRABPAY", data.get("amount"), success_url, failure_url)
+    success_url = _checkout_return_url("pages.checkout_success")
+    failure_url = _checkout_return_url("pages.checkout_failed")
+    result, err = _do_xendit_payment_request("GRABPAY", None, success_url, failure_url)
     if err:
         return err[0], err[1]
     redirect_url, payment_id = result
