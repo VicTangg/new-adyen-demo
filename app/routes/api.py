@@ -108,12 +108,21 @@ def _image_public_url(filename):
     return request.url_root.rstrip("/") + url_for("static", filename=f"{IMAGE_HOST_DIR_NAME}/{filename}")
 
 
-def _image_host_purge_if_over_limit():
-    total_bytes = _image_host_total_size_bytes()
-    if total_bytes > IMAGE_HOST_MAX_BYTES:
-        _image_host_purge_all()
-        return True
-    return False
+def _image_host_delete_auth_error():
+    expected = (current_app.config.get("IMAGE_HOST_DELETE_TOKEN") or "").strip()
+    if not expected:
+        return jsonify({"error": "Image host bulk delete is disabled"}), 403
+
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    provided = ""
+    if auth_header.lower().startswith("bearer "):
+        provided = auth_header[7:].strip()
+    if not provided:
+        provided = (request.headers.get("X-Image-Host-Delete-Token") or "").strip()
+
+    if provided != expected:
+        return jsonify({"error": "Forbidden"}), 403
+    return None
 
 
 def get_adyen_client():
@@ -146,7 +155,6 @@ def list_items():
 @api_bp.route("/image-host/list", methods=["GET"])
 def image_host_list():
     """List all uploaded images with public URLs."""
-    _image_host_purge_if_over_limit()
     images = []
     total_size = 0
     for path in _image_host_dir().iterdir():
@@ -171,7 +179,12 @@ def image_host_list():
 @api_bp.route("/image-host/upload", methods=["POST"])
 def image_host_upload():
     """Upload JPEG/PNG to temporary static storage and return public link."""
-    _image_host_purge_if_over_limit()
+    if request.content_length and request.content_length > IMAGE_HOST_MAX_BYTES:
+        return jsonify({"error": "image upload exceeds the 100 MB storage limit"}), 413
+
+    if _image_host_total_size_bytes() >= IMAGE_HOST_MAX_BYTES:
+        return jsonify({"error": "image storage limit reached"}), 507
+
     image = request.files.get("image")
     if not image or not image.filename:
         return jsonify({"error": "image file is required"}), 400
@@ -190,23 +203,28 @@ def image_host_upload():
     stored_name = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}.{ext}"
     file_path = _image_host_dir() / stored_name
     image.save(file_path)
+    file_size = file_path.stat().st_size
 
-    # Enforce hard storage cap by wiping all files once exceeded.
-    if _image_host_purge_if_over_limit():
+    # Enforce the hard cap by rejecting only the new upload; existing links remain valid.
+    if file_size > IMAGE_HOST_MAX_BYTES or _image_host_total_size_bytes() > IMAGE_HOST_MAX_BYTES:
+        file_path.unlink(missing_ok=True)
         return jsonify({
-            "error": "stored files exceeded 100 MB, so all uploaded images were deleted"
+            "error": "image storage limit reached"
         }), 507
 
     return jsonify({
         "filename": stored_name,
         "public_url": _image_public_url(stored_name),
-        "size_bytes": file_path.stat().st_size,
+        "size_bytes": file_size,
     }), 201
 
 
 @api_bp.route("/image-host/delete-all", methods=["POST"])
 def image_host_delete_all():
     """Delete all temporary hosted images."""
+    auth_error = _image_host_delete_auth_error()
+    if auth_error:
+        return auth_error
     removed_count = _image_host_purge_all()
     return jsonify({"message": "All uploaded images deleted", "removed_count": removed_count})
 

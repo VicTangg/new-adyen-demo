@@ -26,3 +26,6 @@ class DefaultConfig:
     XENDIT_PUBLIC_KEY = os.environ.get("XENDIT_PUBLIC_KEY", "")
     # Thailand mobile banking / direct debit: business ID from Xendit Dashboard (Settings → Business)
     XENDIT_DESTINATION_ACCOUNT_ID = os.environ.get("XENDIT_DESTINATION_ACCOUNT_ID", "")
+
+    # Shared secret required for POST /api/image-host/delete-all.
+    IMAGE_HOST_DELETE_TOKEN = os.environ.get("IMAGE_HOST_DELETE_TOKEN", "")
