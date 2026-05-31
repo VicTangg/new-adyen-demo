@@ -26,6 +26,7 @@ IMAGE_HOST_DIR_NAME = "uploads_tmp"
 IMAGE_HOST_MAX_BYTES = 100 * 1024 * 1024
 IMAGE_HOST_ALLOWED_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
 IMAGE_HOST_ALLOWED_MIME_TYPES = frozenset({"image/jpeg", "image/png"})
+ADYEN_ALIPAY_DISCOUNT_RATE = 0.7
 XENDIT_DEFAULT_COMPONENTS_CURRENCY = "IDR"
 XENDIT_DEFAULT_COMPONENTS_COUNTRY = "ID"
 SENSITIVE_KEYS = frozenset({
@@ -111,14 +112,6 @@ def _image_public_url(filename):
     return request.url_root.rstrip("/") + url_for("static", filename=f"{IMAGE_HOST_DIR_NAME}/{filename}")
 
 
-def _image_host_purge_if_over_limit():
-    total_bytes = _image_host_total_size_bytes()
-    if total_bytes > IMAGE_HOST_MAX_BYTES:
-        _image_host_purge_all()
-        return True
-    return False
-
-
 def _bearer_or_header_token(header_name):
     auth_header = request.headers.get("Authorization", "").strip()
     bearer = ""
@@ -171,6 +164,16 @@ def _checkout_return_url(endpoint):
     return f"{_public_base_url()}{url_for(endpoint)}"
 
 
+def _adyen_checkout_amount(payload=None):
+    from app.routes.pages import CHECKOUT_CURRENCY, get_checkout_total_cents
+
+    value = get_checkout_total_cents()
+    payment_method = (payload or {}).get("paymentMethod") or {}
+    if isinstance(payment_method, dict) and payment_method.get("type") == "alipay":
+        value = round(value * ADYEN_ALIPAY_DISCOUNT_RATE)
+    return {"value": int(value), "currency": CHECKOUT_CURRENCY}
+
+
 def get_adyen_client():
     """Return configured Adyen checkout client."""
     from Adyen import Adyen
@@ -201,7 +204,6 @@ def list_items():
 @api_bp.route("/image-host/list", methods=["GET"])
 def image_host_list():
     """List all uploaded images with public URLs."""
-    _image_host_purge_if_over_limit()
     images = []
     total_size = 0
     for path in _image_host_dir().iterdir():
@@ -226,7 +228,6 @@ def image_host_list():
 @api_bp.route("/image-host/upload", methods=["POST"])
 def image_host_upload():
     """Upload JPEG/PNG to temporary static storage and return public link."""
-    _image_host_purge_if_over_limit()
     image = request.files.get("image")
     if not image or not image.filename:
         return jsonify({"error": "image file is required"}), 400
@@ -277,11 +278,6 @@ def image_host_delete_all():
 def adyen_payment_methods():
     """Fetch available payment methods from Adyen (amount, currency, countryCode)."""
     data = request.get_json() or {}
-    amount = data.get("amount") or {}
-    value = int(amount.get("value", 0))
-    currency = amount.get("currency", "EUR")
-    country_code = data.get("countryCode", "NL")
-    channel = data.get("channel", "Web")
     browser_info = data.get("browserInfo")
 
     if not current_app.config.get("ADYEN_MERCHANT_ACCOUNT") or not current_app.config.get("ADYEN_API_KEY"):
@@ -290,9 +286,9 @@ def adyen_payment_methods():
     adyen = get_adyen_client()
     params = {
         "merchantAccount": current_app.config["ADYEN_MERCHANT_ACCOUNT"],
-        "amount": {"value": value, "currency": currency},
-        "countryCode": country_code,
-        "channel": channel,
+        "amount": _adyen_checkout_amount(),
+        "countryCode": "NL",
+        "channel": "Web",
     }
     if browser_info:
         params["browserInfo"] = browser_info
@@ -315,23 +311,16 @@ def adyen_payment_methods():
 
 @api_bp.route("/adyen/payments", methods=["POST"])
 def adyen_payments():
-    """Submit payment (Drop-in payload). Supports redirect and native 3DS. Forwards full body including paymentMethod.holderName (cardholder name) to Adyen."""
+    """Submit payment (Drop-in payload). Server-owned payment controls override client input."""
     data = request.get_json() or {}
     if not current_app.config.get("ADYEN_MERCHANT_ACCOUNT") or not current_app.config.get("ADYEN_API_KEY"):
         return jsonify({"error": "Adyen not configured"}), 503
 
-    # Ensure server-side required fields (amount, reference, returnUrl, merchantAccount)
-    if "amount" not in data and "value" not in data.get("amount", {}):
-        return jsonify({"error": "amount required"}), 400
-    if "reference" not in data:
-        data["reference"] = f"ref-{uuid.uuid4().hex[:16]}"
-    if "returnUrl" not in data:
-        base = request.url_root.rstrip("/")
-        data["returnUrl"] = f"{base}/checkout/return"
-    if "merchantAccount" not in data:
-        data["merchantAccount"] = current_app.config["ADYEN_MERCHANT_ACCOUNT"]
-    if "channel" not in data:
-        data["channel"] = "Web"
+    data["amount"] = _adyen_checkout_amount(data)
+    data["reference"] = f"ref-{uuid.uuid4().hex[:16]}"
+    data["returnUrl"] = _checkout_return_url("pages.checkout_return")
+    data["merchantAccount"] = current_app.config["ADYEN_MERCHANT_ACCOUNT"]
+    data["channel"] = "Web"
 
     adyen = get_adyen_client()
     try:

@@ -1,4 +1,5 @@
 import io
+import json
 import shutil
 import tempfile
 import unittest
@@ -22,6 +23,34 @@ class MockResponse:
 
     def json(self):
         return self._payload
+
+
+class MockAdyenResult:
+    def __init__(self, payload=None):
+        self.raw_response = json.dumps(payload or {"resultCode": "Authorised"})
+
+
+class MockAdyenPaymentsApi:
+    def __init__(self, captured):
+        self.captured = captured
+
+    def payment_methods(self, params):
+        self.captured["payment_methods"] = params
+        return MockAdyenResult({"paymentMethods": []})
+
+    def payments(self, payload):
+        self.captured["payments"] = payload
+        return MockAdyenResult()
+
+
+class MockAdyenCheckout:
+    def __init__(self, captured):
+        self.payments_api = MockAdyenPaymentsApi(captured)
+
+
+class MockAdyenClient:
+    def __init__(self, captured):
+        self.checkout = MockAdyenCheckout(captured)
 
 
 class CriticalRegressionTests(unittest.TestCase):
@@ -85,6 +114,15 @@ class CriticalRegressionTests(unittest.TestCase):
         self.assertTrue(existing.exists())
         self.assertEqual([path.name for path in self.upload_dir.iterdir()], ["existing.png"])
 
+    def test_over_quota_list_does_not_delete_existing_files(self):
+        existing = self.upload_dir / "existing.png"
+        existing.write_bytes(b"x" * 20)
+
+        response = self.client.get("/api/image-host/list")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(existing.exists())
+
     def test_adyen_management_patch_requires_write_token(self):
         with patch("app.routes.api.requests.patch") as mock_patch:
             response = self.client.patch(
@@ -105,6 +143,65 @@ class CriticalRegressionTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_patch.assert_called_once()
+
+    def test_adyen_payment_methods_ignores_client_amount_controls(self):
+        captured = {}
+
+        with patch("app.routes.api.get_adyen_client", return_value=MockAdyenClient(captured)):
+            response = self.client.post(
+                "/api/adyen/paymentMethods",
+                json={
+                    "amount": {"value": 1, "currency": "USD"},
+                    "countryCode": "US",
+                    "channel": "iOS",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = captured["payment_methods"]
+        self.assertEqual(payload["amount"], {"value": get_checkout_total_cents(), "currency": "EUR"})
+        self.assertEqual(payload["countryCode"], "NL")
+        self.assertEqual(payload["channel"], "Web")
+
+    def test_adyen_payment_ignores_client_amount_and_return_url(self):
+        captured = {}
+
+        with patch("app.routes.api.get_adyen_client", return_value=MockAdyenClient(captured)):
+            response = self.client.post(
+                "/api/adyen/payments",
+                json={
+                    "paymentMethod": {"type": "scheme", "encryptedCardNumber": "test"},
+                    "amount": {"value": 1, "currency": "USD"},
+                    "reference": "attacker-ref",
+                    "returnUrl": "https://evil.example/return",
+                    "merchantAccount": "attacker-merchant",
+                    "channel": "iOS",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = captured["payments"]
+        self.assertEqual(payload["amount"], {"value": get_checkout_total_cents(), "currency": "EUR"})
+        self.assertEqual(payload["returnUrl"], "https://shop.example/checkout/return")
+        self.assertEqual(payload["merchantAccount"], "merchant")
+        self.assertEqual(payload["channel"], "Web")
+        self.assertNotEqual(payload["reference"], "attacker-ref")
+
+    def test_adyen_payment_applies_server_side_alipay_discount(self):
+        captured = {}
+
+        with patch("app.routes.api.get_adyen_client", return_value=MockAdyenClient(captured)):
+            response = self.client.post(
+                "/api/adyen/payments",
+                json={
+                    "paymentMethod": {"type": "alipay"},
+                    "amount": {"value": 1, "currency": "USD"},
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = captured["payments"]
+        self.assertEqual(payload["amount"], {"value": round(get_checkout_total_cents() * 0.7), "currency": "EUR"})
 
     def test_xendit_session_ignores_client_payment_controls(self):
         captured = {}
