@@ -213,6 +213,26 @@ class CriticalRegressionTests(unittest.TestCase):
         self.assertEqual(payload["country"], "ID")
         self.assertNotIn("https://evil.example", payload["components_configuration"]["origins"])
 
+    def test_checkout_uses_live_adyen_cdn_for_live_environment(self):
+        app = make_app({"ADYEN_ENVIRONMENT": "live"})
+        with app.test_client() as client:
+            resp = client.get("/checkout")
+
+        html = resp.get_data(as_text=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("https://checkoutshopper-live.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js", html)
+        self.assertNotIn("https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js", html)
+
+    def test_checkout_unknown_payment_result_codes_fail_closed(self):
+        app = make_app()
+        with app.test_client() as client:
+            resp = client.get("/checkout")
+
+        html = resp.get_data(as_text=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Unknown terminal codes should fail closed", html)
+        self.assertIn("window.location.href = failedUrl;", html)
+
 
 if __name__ == "__main__":
     unittest.main()
