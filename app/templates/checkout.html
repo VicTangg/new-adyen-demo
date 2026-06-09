@@ -98,9 +98,10 @@
     };
   })();
 </script>
-<script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js"
+{% set adyen_sdk_host = "checkoutshopper-live.adyen.com" if environment == "live" else "checkoutshopper-test.adyen.com" %}
+<script src="https://{{ adyen_sdk_host }}/checkoutshopper/sdk/6.33.0/adyen.js"
   crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.css" />
+<link rel="stylesheet" href="https://{{ adyen_sdk_host }}/checkoutshopper/sdk/6.33.0/adyen.css" />
 {% endblock %}
 
 {% block scripts %}
