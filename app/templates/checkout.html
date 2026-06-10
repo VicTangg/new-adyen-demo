@@ -98,9 +98,10 @@
     };
   })();
 </script>
-<script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js"
+{% set adyen_cdn_host = 'checkoutshopper-live.adyen.com' if environment == 'live' else 'checkoutshopper-test.adyen.com' %}
+<script src="https://{{ adyen_cdn_host }}/checkoutshopper/sdk/6.33.0/adyen.js"
   crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.css" />
+<link rel="stylesheet" href="https://{{ adyen_cdn_host }}/checkoutshopper/sdk/6.33.0/adyen.css" />
 {% endblock %}
 
 {% block scripts %}
@@ -167,11 +168,10 @@
       window.location.href = failedUrl;
       return;
     }
-    // Intermediate (e.g. PresentToShopper, ChallengeShopper) are handled by action; if no action, treat as pending/success
+    // Intermediate (e.g. PresentToShopper, ChallengeShopper) are handled by action.
     if (code === 'PresentToShopper' || code === 'ChallengeShopper' || code === 'IdentifyShopper' || code === 'RedirectShopper') return;
     if (code === 'AuthenticationNotRequired' || code === 'AuthenticationFinished') return;
-    // Any other code: redirect to success to be safe (e.g. legacy codes)
-    window.location.href = successUrl;
+    window.location.href = failedUrl;
   }
 
   fetchPaymentMethods().then(function (paymentMethodsResponse) {
@@ -550,27 +550,12 @@
     });
 
     var dropinInstance = null;
-    var binDiscountApplied = false;
     var alipayDiscountApplied = false;
-    var DISCOUNT_BIN_PREFIXES = ['411111', '555534'];
-    var DISCOUNT_RATE = 0.8; // 20% off => pay 80%
     var ALIPAY_DISCOUNT_RATE = 0.7; // 30% off => pay 70%
-
-    function isQualifyingBin(issuerBin) {
-      if (!issuerBin) return false;
-      var bin = String(issuerBin);
-      for (var i = 0; i < DISCOUNT_BIN_PREFIXES.length; i++) {
-        if (bin.indexOf(DISCOUNT_BIN_PREFIXES[i]) === 0) return true;
-      }
-      return false;
-    }
 
     function getDisplayAmountAndNote() {
       if (alipayDiscountApplied) {
         return { amount: Math.round(totalCents * ALIPAY_DISCOUNT_RATE) / 100, note: '30% discount (Alipay)' };
-      }
-      if (binDiscountApplied) {
-        return { amount: Math.round(totalCents * DISCOUNT_RATE) / 100, note: '20% discount (qualifying card)' };
       }
       return { amount: totalCents / 100, note: '' };
     }
@@ -589,22 +574,7 @@
 
     var cardConfig = {
       hasHolderName: true,
-      holderNameRequired: true,
-      // billingAddressRequired: true,
-      onFieldValid: function (data) {
-        console.log(data.fieldType)
-        if (data.fieldType === 'encryptedCardNumber') {
-          var bin = (data && data.issuerBin) || (data && data.data && data.data.issuerBin);
-          if (bin === undefined) {
-            binDiscountApplied = false;
-            updateCartTotalDisplay();
-            return;
-          }
-          binDiscountApplied = isQualifyingBin(bin);
-          updateCartTotalDisplay();
-        }
-        return
-      }
+      holderNameRequired: true
     };
     var dropinConfiguration = {
       onSelect: function (component) {
@@ -627,15 +597,11 @@
       onSubmit: function (state, component) {
         var amountCents = alipayDiscountApplied
           ? Math.round(totalCents * ALIPAY_DISCOUNT_RATE)
-          : (binDiscountApplied ? Math.round(totalCents * DISCOUNT_RATE) : totalCents);
-        console.log(binDiscountApplied)
-        console.log(amountCents)
+          : totalCents;
         var payload = Object.assign({}, state.data, {
           amount: { value: amountCents, currency: currency },
-          reference: 'ref-' + Date.now(),
           browserInfo: getBrowserInfo(),
-          channel: 'Web',
-          returnUrl: getReturnUrl()
+          channel: 'Web'
         });
         if (typeof window.location.origin !== 'undefined') payload.origin = window.location.origin;
         payload.additionalData = payload.additionalData || {};
