@@ -27,12 +27,16 @@ ADYEN_API_KEY=your_adyen_api_key
 ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
+ADYEN_MANAGEMENT_WRITE_TOKEN=your_management_write_token
 HMAC_SECRET=your_webhook_hmac_key
+IMAGE_HOST_DELETE_TOKEN=your_image_delete_token
 ```
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
 - **Merchant account**: your test merchant account name.
+- **ADYEN_MANAGEMENT_WRITE_TOKEN**: Required for Management API PATCH routes. Send it as a bearer token or `X-Adyen-Management-Write-Token`.
+- **IMAGE_HOST_DELETE_TOKEN**: Required for `POST /api/image-host/delete-all`. Send it as a bearer token or `X-Image-Host-Delete-Token`.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
 
 ## Run
