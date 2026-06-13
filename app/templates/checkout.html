@@ -98,9 +98,10 @@
     };
   })();
 </script>
-<script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js"
+{% set adyen_cdn_host = 'checkoutshopper-live.adyen.com' if environment == 'live' else 'checkoutshopper-test.adyen.com' %}
+<script src="https://{{ adyen_cdn_host }}/checkoutshopper/sdk/6.33.0/adyen.js"
   crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.css" />
+<link rel="stylesheet" href="https://{{ adyen_cdn_host }}/checkoutshopper/sdk/6.33.0/adyen.css" />
 {% endblock %}
 
 {% block scripts %}
@@ -170,8 +171,8 @@
     // Intermediate (e.g. PresentToShopper, ChallengeShopper) are handled by action; if no action, treat as pending/success
     if (code === 'PresentToShopper' || code === 'ChallengeShopper' || code === 'IdentifyShopper' || code === 'RedirectShopper') return;
     if (code === 'AuthenticationNotRequired' || code === 'AuthenticationFinished') return;
-    // Any other code: redirect to success to be safe (e.g. legacy codes)
-    window.location.href = successUrl;
+    // Unknown terminal states must not show a successful payment.
+    window.location.href = failedUrl;
   }
 
   fetchPaymentMethods().then(function (paymentMethodsResponse) {

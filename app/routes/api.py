@@ -1,5 +1,6 @@
 """API blueprint — JSON endpoints."""
 import copy
+import hmac
 import json
 import time
 import uuid
@@ -108,12 +109,37 @@ def _image_public_url(filename):
     return request.url_root.rstrip("/") + url_for("static", filename=f"{IMAGE_HOST_DIR_NAME}/{filename}")
 
 
-def _image_host_purge_if_over_limit():
-    total_bytes = _image_host_total_size_bytes()
-    if total_bytes > IMAGE_HOST_MAX_BYTES:
-        _image_host_purge_all()
-        return True
-    return False
+def _bearer_token():
+    auth = request.headers.get("Authorization", "")
+    prefix = "Bearer "
+    if auth.startswith(prefix):
+        return auth[len(prefix):].strip()
+    return ""
+
+
+def _require_configured_token(config_key, header_name):
+    expected = (current_app.config.get(config_key) or "").strip()
+    if not expected:
+        return jsonify({"error": f"{config_key} not configured"}), 503
+
+    provided = (request.headers.get(header_name) or "").strip() or _bearer_token()
+    if not provided or not hmac.compare_digest(provided, expected):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    return None
+
+
+def _checkout_amount(payment_method=None):
+    from app.routes.pages import CHECKOUT_CURRENCY, get_checkout_total_cents
+
+    value = get_checkout_total_cents()
+    if isinstance(payment_method, dict) and payment_method.get("type") == "alipay":
+        value = round(value * 0.7)
+    return {"value": int(value), "currency": CHECKOUT_CURRENCY}
+
+
+def _checkout_url(endpoint):
+    return url_for(endpoint, _external=True)
 
 
 def get_adyen_client():
@@ -146,7 +172,6 @@ def list_items():
 @api_bp.route("/image-host/list", methods=["GET"])
 def image_host_list():
     """List all uploaded images with public URLs."""
-    _image_host_purge_if_over_limit()
     images = []
     total_size = 0
     for path in _image_host_dir().iterdir():
@@ -171,7 +196,6 @@ def image_host_list():
 @api_bp.route("/image-host/upload", methods=["POST"])
 def image_host_upload():
     """Upload JPEG/PNG to temporary static storage and return public link."""
-    _image_host_purge_if_over_limit()
     image = request.files.get("image")
     if not image or not image.filename:
         return jsonify({"error": "image file is required"}), 400
@@ -191,10 +215,11 @@ def image_host_upload():
     file_path = _image_host_dir() / stored_name
     image.save(file_path)
 
-    # Enforce hard storage cap by wiping all files once exceeded.
-    if _image_host_purge_if_over_limit():
+    # Enforce the storage cap without deleting previously hosted images.
+    if _image_host_total_size_bytes() > IMAGE_HOST_MAX_BYTES:
+        file_path.unlink(missing_ok=True)
         return jsonify({
-            "error": "stored files exceeded 100 MB, so all uploaded images were deleted"
+            "error": "stored files would exceed 100 MB"
         }), 507
 
     return jsonify({
@@ -207,6 +232,9 @@ def image_host_upload():
 @api_bp.route("/image-host/delete-all", methods=["POST"])
 def image_host_delete_all():
     """Delete all temporary hosted images."""
+    auth_error = _require_configured_token("IMAGE_HOST_DELETE_TOKEN", "X-Image-Host-Delete-Token")
+    if auth_error:
+        return auth_error
     removed_count = _image_host_purge_all()
     return jsonify({"message": "All uploaded images deleted", "removed_count": removed_count})
 
@@ -217,9 +245,6 @@ def image_host_delete_all():
 def adyen_payment_methods():
     """Fetch available payment methods from Adyen (amount, currency, countryCode)."""
     data = request.get_json() or {}
-    amount = data.get("amount") or {}
-    value = int(amount.get("value", 0))
-    currency = amount.get("currency", "EUR")
     country_code = data.get("countryCode", "NL")
     channel = data.get("channel", "Web")
     browser_info = data.get("browserInfo")
@@ -230,7 +255,7 @@ def adyen_payment_methods():
     adyen = get_adyen_client()
     params = {
         "merchantAccount": current_app.config["ADYEN_MERCHANT_ACCOUNT"],
-        "amount": {"value": value, "currency": currency},
+        "amount": _checkout_amount(),
         "countryCode": country_code,
         "channel": channel,
     }
@@ -260,18 +285,12 @@ def adyen_payments():
     if not current_app.config.get("ADYEN_MERCHANT_ACCOUNT") or not current_app.config.get("ADYEN_API_KEY"):
         return jsonify({"error": "Adyen not configured"}), 503
 
-    # Ensure server-side required fields (amount, reference, returnUrl, merchantAccount)
-    if "amount" not in data and "value" not in data.get("amount", {}):
-        return jsonify({"error": "amount required"}), 400
-    if "reference" not in data:
-        data["reference"] = f"ref-{uuid.uuid4().hex[:16]}"
-    if "returnUrl" not in data:
-        base = request.url_root.rstrip("/")
-        data["returnUrl"] = f"{base}/checkout/return"
-    if "merchantAccount" not in data:
-        data["merchantAccount"] = current_app.config["ADYEN_MERCHANT_ACCOUNT"]
-    if "channel" not in data:
-        data["channel"] = "Web"
+    # Sensitive payment fields are authoritative on the server.
+    data["amount"] = _checkout_amount(data.get("paymentMethod"))
+    data["reference"] = f"ref-{uuid.uuid4().hex[:16]}"
+    data["returnUrl"] = _checkout_url("pages.checkout_return")
+    data["merchantAccount"] = current_app.config["ADYEN_MERCHANT_ACCOUNT"]
+    data["channel"] = "Web"
 
     adyen = get_adyen_client()
     try:
@@ -447,6 +466,10 @@ def adyen_store_detail(store_id):
 @api_bp.route("/adyen/stores/<store_id>", methods=["PATCH"])
 def adyen_store_update(store_id):
     """Update a store via Adyen Management API PATCH /merchants/{merchantId}/stores/{storeId}."""
+    auth_error = _require_configured_token("ADYEN_MANAGEMENT_WRITE_TOKEN", "X-Adyen-Management-Write-Token")
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -509,6 +532,10 @@ def adyen_split_configuration(split_configuration_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>", methods=["PATCH"])
 def adyen_split_rule_update(split_configuration_id, rule_id):
     """Update split conditions via PATCH /merchants/{merchantId}/splitConfigurations/{splitConfigurationId}/rules/{ruleId}."""
+    auth_error = _require_configured_token("ADYEN_MANAGEMENT_WRITE_TOKEN", "X-Adyen-Management-Write-Token")
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -542,6 +569,10 @@ def adyen_split_rule_update(split_configuration_id, rule_id):
 @api_bp.route("/adyen/splitConfigurations/<split_configuration_id>/rules/<rule_id>/splitLogic/<split_logic_id>", methods=["PATCH"])
 def adyen_split_logic_update(split_configuration_id, rule_id, split_logic_id):
     """Update split logic via PATCH /merchants/{merchantId}/splitConfigurations/.../rules/{ruleId}/splitLogic/{splitLogicId}."""
+    auth_error = _require_configured_token("ADYEN_MANAGEMENT_WRITE_TOKEN", "X-Adyen-Management-Write-Token")
+    if auth_error:
+        return auth_error
+
     merchant_id = current_app.config.get("ADYEN_MERCHANT_ACCOUNT")
     api_key = current_app.config.get("ADYEN_API_KEY")
     env = current_app.config.get("ADYEN_ENVIRONMENT", "test")
@@ -582,24 +613,19 @@ def xendit_create_session():
         return jsonify({"error": "Xendit not configured"}), 503
 
     data = request.get_json() or {}
-    amount = data.get("amount")
-    currency = data.get("currency", "IDR")
-    country = data.get("country", "ID")
+    from app.routes.pages import get_checkout_total_cents
 
-    if amount is None:
-        from app.routes.pages import get_checkout_total_cents
-        amount = get_checkout_total_cents()
+    amount = get_checkout_total_cents()
+    currency = "IDR"
+    country = "ID"
 
     ref_id = f"xendit-{uuid.uuid4().hex[:16]}"
     cust_ref = str(uuid.uuid4())
 
-    # Xendit requires HTTPS for origins; prefer client-provided origin (handles ngrok, etc.)
-    client_origin = (data.get("origin") or "").strip()
-    if client_origin and not client_origin.startswith("https://"):
-        client_origin = client_origin.replace("http://", "https://", 1)
+    # Xendit requires HTTPS origins. Do not trust browser-supplied origins.
     base_url = request.url_root.rstrip("/")
     base_https = base_url if base_url.startswith("https://") else base_url.replace("http://", "https://", 1)
-    origins = [o for o in [client_origin, base_https, "https://localhost:5001", "https://new-adyen-demo-377583b87f3c.herokuapp.com"] if o]
+    origins = [o for o in [base_https, "https://localhost:5001", "https://new-adyen-demo-377583b87f3c.herokuapp.com"] if o]
     origins = list(dict.fromkeys(origins))
     payload = {
         "reference_id": ref_id,
@@ -765,12 +791,11 @@ def xendit_payment_request():
     if not channel_code:
         return jsonify({"error": "channel_code required"}), 400
 
-    base_url = request.url_root.rstrip("/")
-    success_url = data.get("success_return_url") or f"{base_url}/checkout/success"
-    failure_url = data.get("failure_return_url") or f"{base_url}/checkout/failed"
+    success_url = _checkout_url("pages.checkout_success")
+    failure_url = _checkout_url("pages.checkout_failed")
 
     result, err = _do_xendit_payment_request(
-        channel_code, data.get("amount"), success_url, failure_url
+        channel_code, None, success_url, failure_url
     )
     if err:
         return err[0], err[1]
@@ -781,11 +806,9 @@ def xendit_payment_request():
 @api_bp.route("/xendit/payment-grabpay", methods=["POST"])
 def xendit_payment_grabpay():
     """Legacy: Create GrabPay payment. Prefer POST /xendit/payment-request with channel_code=GRABPAY."""
-    data = request.get_json() or {}
-    base_url = request.url_root.rstrip("/")
-    success_url = data.get("success_return_url") or f"{base_url}/checkout/success"
-    failure_url = data.get("failure_return_url") or f"{base_url}/checkout/failed"
-    result, err = _do_xendit_payment_request("GRABPAY", data.get("amount"), success_url, failure_url)
+    success_url = _checkout_url("pages.checkout_success")
+    failure_url = _checkout_url("pages.checkout_failed")
+    result, err = _do_xendit_payment_request("GRABPAY", None, success_url, failure_url)
     if err:
         return err[0], err[1]
     redirect_url, payment_id = result
