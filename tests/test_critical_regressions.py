@@ -1,6 +1,7 @@
 import io
 import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -103,7 +104,8 @@ class CriticalRegressionTests(unittest.TestCase):
     def test_image_delete_all_requires_delete_token(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             self.app.static_folder = temp_dir
-            image_dir = api._image_host_dir()
+            image_dir = Path(temp_dir) / api.IMAGE_HOST_DIR_NAME
+            image_dir.mkdir(parents=True, exist_ok=True)
             image_path = image_dir / "existing.jpg"
             image_path.write_bytes(b"existing")
 
@@ -115,7 +117,8 @@ class CriticalRegressionTests(unittest.TestCase):
     def test_over_quota_upload_removes_only_new_file(self):
         with tempfile.TemporaryDirectory() as temp_dir, patch.object(api, "IMAGE_HOST_MAX_BYTES", 10):
             self.app.static_folder = temp_dir
-            image_dir = api._image_host_dir()
+            image_dir = Path(temp_dir) / api.IMAGE_HOST_DIR_NAME
+            image_dir.mkdir(parents=True, exist_ok=True)
             existing_path = image_dir / "existing.jpg"
             existing_path.write_bytes(b"existing")
 
