@@ -10,7 +10,6 @@ def create_app(config=None):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config.from_object("app.config.DefaultConfig")
     if config:
-        print(config)
         app.config.update(config)
 
     from app.routes.pages import pages_bp
