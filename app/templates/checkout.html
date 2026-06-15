@@ -98,9 +98,9 @@
     };
   })();
 </script>
-<script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js"
+<script src="https://checkoutshopper-{{ 'live' if environment == 'live' else 'test' }}.adyen.com/checkoutshopper/sdk/6.33.0/adyen.js"
   crossorigin="anonymous"></script>
-<link rel="stylesheet" href="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.33.0/adyen.css" />
+<link rel="stylesheet" href="https://checkoutshopper-{{ 'live' if environment == 'live' else 'test' }}.adyen.com/checkoutshopper/sdk/6.33.0/adyen.css" />
 {% endblock %}
 
 {% block scripts %}
@@ -170,8 +170,8 @@
     // Intermediate (e.g. PresentToShopper, ChallengeShopper) are handled by action; if no action, treat as pending/success
     if (code === 'PresentToShopper' || code === 'ChallengeShopper' || code === 'IdentifyShopper' || code === 'RedirectShopper') return;
     if (code === 'AuthenticationNotRequired' || code === 'AuthenticationFinished') return;
-    // Any other code: redirect to success to be safe (e.g. legacy codes)
-    window.location.href = successUrl;
+    // Unknown terminal-looking codes fail closed so failed payments are not shown as successful.
+    window.location.href = failedUrl;
   }
 
   fetchPaymentMethods().then(function (paymentMethodsResponse) {
@@ -569,9 +569,6 @@
       if (alipayDiscountApplied) {
         return { amount: Math.round(totalCents * ALIPAY_DISCOUNT_RATE) / 100, note: '30% discount (Alipay)' };
       }
-      if (binDiscountApplied) {
-        return { amount: Math.round(totalCents * DISCOUNT_RATE) / 100, note: '20% discount (qualifying card)' };
-      }
       return { amount: totalCents / 100, note: '' };
     }
 
@@ -625,9 +622,7 @@
       paymentMethodsResponse: paymentMethodsResponse,
       paymentMethodsConfiguration: { card: cardConfig },
       onSubmit: function (state, component) {
-        var amountCents = alipayDiscountApplied
-          ? Math.round(totalCents * ALIPAY_DISCOUNT_RATE)
-          : (binDiscountApplied ? Math.round(totalCents * DISCOUNT_RATE) : totalCents);
+        var amountCents = alipayDiscountApplied ? Math.round(totalCents * ALIPAY_DISCOUNT_RATE) : totalCents;
         console.log(binDiscountApplied)
         console.log(amountCents)
         var payload = Object.assign({}, state.data, {
