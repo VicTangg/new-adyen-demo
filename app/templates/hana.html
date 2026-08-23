@@ -68,14 +68,22 @@
     <section id="rumi-chat-prompts" class="rumi-chat-prompts" aria-labelledby="rumi-chat-prompts-title">
       <p id="rumi-chat-prompts-title">Choose a prepared response</p>
       <div id="rumi-chat-prompt-list" class="rumi-chat-prompt-list"></div>
-      <button id="rumi-math-launch" class="rumi-chat-math-launch" type="button">Start the 100-question Math Quest</button>
+      <button id="rumi-math-launch" class="rumi-chat-math-launch" type="button">Choose an IB Math Quest</button>
       <button id="rumi-chat-restart" class="rumi-chat-restart" type="button">Start over</button>
+    </section>
+
+    <section id="rumi-math-grade-picker" class="rumi-math-grade-picker" aria-labelledby="rumi-math-grade-title" hidden>
+      <p class="rumi-chat-kicker">Rumi’s IB-aligned Math Quest</p>
+      <h3 id="rumi-math-grade-title">Choose your programme level</h3>
+      <p>Each level has 100 prepared questions across its relevant mathematics topics.</p>
+      <div id="rumi-math-grade-list" class="rumi-math-grade-list"></div>
+      <button id="rumi-math-grade-exit" class="rumi-math-exit" type="button">Back to chat</button>
     </section>
 
     <section id="rumi-math-quest" class="rumi-math-quest" aria-labelledby="rumi-math-title" hidden>
       <header class="rumi-math-header">
         <div>
-          <p class="rumi-chat-kicker">Rumi’s Grade 3 Math Quest</p>
+          <p id="rumi-math-level" class="rumi-chat-kicker">Rumi’s Math Quest</p>
           <h3 id="rumi-math-title">Ready for the next challenge?</h3>
         </div>
         <p id="rumi-math-progress" class="rumi-math-progress" aria-live="polite"></p>
@@ -85,6 +93,8 @@
       <p id="rumi-math-feedback" class="rumi-math-feedback" role="status"></p>
       <div class="rumi-math-actions">
         <button id="rumi-math-next" class="rumi-math-next" type="button" hidden>Next question</button>
+        <button id="rumi-math-restart" class="rumi-math-next" type="button" hidden>Restart level</button>
+        <button id="rumi-math-change-grade" class="rumi-math-exit" type="button">Change level</button>
         <button id="rumi-math-exit" class="rumi-math-exit" type="button">Back to chat</button>
       </div>
     </section>
