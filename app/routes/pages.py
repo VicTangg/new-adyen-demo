@@ -1,6 +1,9 @@
 """Page routes — server-rendered with Jinja2."""
 import hmac
+import time
+from collections import OrderedDict
 from functools import lru_cache, wraps
+from threading import RLock
 from urllib.parse import urlparse
 
 import requests
@@ -31,6 +34,14 @@ HANA_GALLERIES = (
     },
 )
 HANA_SESSION_KEY = "hana_authenticated"
+HANA_IMAGE_WIDTH = 640
+HANA_REQUEST_RETRIES = 2
+HANA_REQUEST_TIMEOUT = (2, 5)
+HANA_MAX_IMAGE_BYTES = 2 * 1024 * 1024
+HANA_IMAGE_CACHE_SIZE = 24
+HANA_IMAGE_CACHE_TTL = 60 * 60
+HANA_IMAGE_CACHE = OrderedDict()
+HANA_IMAGE_CACHE_LOCK = RLock()
 
 
 def get_checkout_total_cents():
@@ -48,11 +59,30 @@ def hana_access_required(view):
     return wrapped_view
 
 
+def fetch_hana_url(url, **kwargs):
+    """Fetch a Fandom resource with brief retries for transient failures."""
+    for attempt in range(HANA_REQUEST_RETRIES + 1):
+        try:
+            response = requests.get(url, timeout=HANA_REQUEST_TIMEOUT, **kwargs)
+            if response.status_code not in {429, 500, 502, 503, 504}:
+                response.raise_for_status()
+                return response
+            response.close()
+        except requests.RequestException as error:
+            if getattr(error, "response", None) is not None:
+                error.response.close()
+
+        if attempt < HANA_REQUEST_RETRIES:
+            time.sleep(0.25 * (attempt + 1))
+
+    return None
+
+
 @lru_cache(maxsize=len(HANA_GALLERIES))
 def get_hana_gallery_images(api_url, page_title, source_name, source_url):
     """Fetch a limited set of images from a public Fandom gallery."""
     try:
-        response = requests.get(
+        response = fetch_hana_url(
             api_url,
             params={
                 "action": "query",
@@ -60,14 +90,18 @@ def get_hana_gallery_images(api_url, page_title, source_name, source_url):
                 "generator": "images",
                 "gimlimit": 24,
                 "iiprop": "url|mime",
+                "iiurlwidth": HANA_IMAGE_WIDTH,
                 "prop": "imageinfo",
                 "titles": page_title,
             },
             headers={"User-Agent": "hana-gallery/1.0"},
-            timeout=10,
         )
-        response.raise_for_status()
-        pages = response.json().get("query", {}).get("pages", {}).values()
+        if response is None:
+            return ()
+        try:
+            pages = response.json().get("query", {}).get("pages", {}).values()
+        finally:
+            response.close()
     except (requests.RequestException, ValueError):
         return ()
 
@@ -78,7 +112,7 @@ def get_hana_gallery_images(api_url, page_title, source_name, source_url):
         if not image_info:
             continue
         image = image_info[0]
-        url = image.get("url", "")
+        url = image.get("thumburl") or image.get("url", "")
         if not url.startswith("https://") or url in seen_urls:
             continue
         if not image.get("mime", "").startswith("image/"):
@@ -103,6 +137,16 @@ def get_hana_image_data(gallery_index, image_index):
     """Fetch a curated gallery image for same-origin display."""
     if not 0 <= gallery_index < len(HANA_GALLERIES):
         return None
+    cache_key = (gallery_index, image_index)
+    now = time.monotonic()
+    with HANA_IMAGE_CACHE_LOCK:
+        cached_image = HANA_IMAGE_CACHE.get(cache_key)
+        if cached_image is not None:
+            cached_at, image_data = cached_image
+            if now - cached_at < HANA_IMAGE_CACHE_TTL:
+                HANA_IMAGE_CACHE.move_to_end(cache_key)
+                return image_data
+            del HANA_IMAGE_CACHE[cache_key]
 
     gallery = HANA_GALLERIES[gallery_index]
     images = get_hana_gallery_images(
@@ -119,20 +163,31 @@ def get_hana_image_data(gallery_index, image_index):
     if not hostname.endswith(".wikia.nocookie.net"):
         return None
 
-    try:
-        response = requests.get(
-            image_url,
-            headers={"User-Agent": "hana-gallery/1.0"},
-            timeout=20,
-        )
-        response.raise_for_status()
-    except requests.RequestException:
+    response = fetch_hana_url(
+        image_url,
+        headers={"User-Agent": "hana-gallery/1.0"},
+    )
+    if response is None:
         return None
 
-    content_type = response.headers.get("content-type", "")
-    if not content_type.startswith("image/"):
+    try:
+        content_type = response.headers.get("content-type", "")
+        if not content_type.startswith("image/"):
+            return None
+        content = response.content
+    finally:
+        response.close()
+
+    if len(content) > HANA_MAX_IMAGE_BYTES:
         return None
-    return response.content, content_type
+
+    image_data = content, content_type
+    with HANA_IMAGE_CACHE_LOCK:
+        HANA_IMAGE_CACHE[cache_key] = (time.monotonic(), image_data)
+        HANA_IMAGE_CACHE.move_to_end(cache_key)
+        while len(HANA_IMAGE_CACHE) > HANA_IMAGE_CACHE_SIZE:
+            HANA_IMAGE_CACHE.popitem(last=False)
+    return image_data
 
 
 @pages_bp.route("/")
@@ -215,7 +270,7 @@ def hana_image(gallery_index, image_index):
     return Response(
         content,
         content_type=content_type,
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "private, max-age=3600"},
     )
 
 

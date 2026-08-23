@@ -144,6 +144,9 @@
   const mathFeedback = document.getElementById("rumi-math-feedback");
   const mathNextButton = document.getElementById("rumi-math-next");
   const mathExitButton = document.getElementById("rumi-math-exit");
+  const galleryImages = typeof document.querySelectorAll === "function"
+    ? document.querySelectorAll(".hana-gallery img")
+    : [];
 
   if (
     !dialog || !launcher || !closeButton || !messages || !promptPanel || !promptList || !restartButton
@@ -152,6 +155,22 @@
   ) {
     return;
   }
+
+  galleryImages.forEach((image) => {
+    image.addEventListener("error", () => {
+      const retries = Number(image.dataset.retryCount || 0);
+      if (retries >= 2) {
+        return;
+      }
+
+      image.dataset.retryCount = String(retries + 1);
+      window.setTimeout(() => {
+        const retryUrl = new URL(image.src, window.location.href);
+        retryUrl.searchParams.set("retry", String(retries + 1));
+        image.src = retryUrl.toString();
+      }, 750 * (retries + 1));
+    });
+  });
 
   const initialMessages = messages.innerHTML;
   let isResponding = false;
