@@ -1,5 +1,6 @@
 """Application configuration."""
 import os
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,8 +12,11 @@ load_dotenv(_env_path)
 
 class DefaultConfig:
     """Default configuration."""
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
+    SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_urlsafe(32)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
     DEBUG = os.environ.get("FLASK_DEBUG", "1") == "1"
+    HANA_PASSWORD = os.environ.get("HANA_PASSWORD", "")
 
     # Adyen (use test credentials; set in .env for production)
     ADYEN_API_KEY = os.environ.get("ADYEN_API_KEY", "")

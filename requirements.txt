@@ -1,6 +1,10 @@
-Flask>=3.0.0
-Werkzeug>=3.0.0
-Adyen>=15.0.1
-python-dotenv>=1.0.0
+# The configured package mirror currently provides Flask only through 2.2.5.
+# Keep Werkzeug below 3.0 because Flask 2.2.x is not compatible with it.
+Flask==2.2.5
+Werkzeug==2.2.3
+# The configured package mirror currently provides Adyen only through 14.0.0.
+Adyen==14.0.0
+# The configured package mirror currently provides python-dotenv through 0.21.1.
+python-dotenv==0.21.1
 requests>=2.28.0
 gunicorn>=21.0.0

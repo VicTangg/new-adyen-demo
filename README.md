@@ -13,9 +13,21 @@ A web app with a **Flask** backend (API server) and **Jinja2** server-side rende
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+./start.sh
+```
+
+`start.sh` creates a separate virtual environment for each operating system and
+CPU architecture, such as `.venv-darwin-arm64` on Apple Silicon or
+`.venv-linux-x86_64` in a typical Vagrant VM. This prevents one environment
+from overwriting the other in a shared folder.
+
+To set up the environment manually on macOS or Linux:
+
+```bash
+VENV_DIR=".venv-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+python -m pip install -r requirements.txt
 ```
 
 ### Adyen configuration (required for checkout)
@@ -28,12 +40,16 @@ ADYEN_CLIENT_KEY=your_adyen_client_key
 ADYEN_MERCHANT_ACCOUNT=your_merchant_account
 ADYEN_ENVIRONMENT=test
 HMAC_SECRET=your_webhook_hmac_key
+SECRET_KEY=generate-a-long-random-value
+HANA_PASSWORD=choose-a-strong-hana-password
 ```
 
 - Get **API key** and **Client key** from [Adyen Customer Area](https://docs.adyen.com/user-management/how-to-get-the-api-key) → Developers → API credentials.
 - **HMAC_SECRET**: For webhooks, generate an HMAC key in Customer Area → Developers → Webhooks → Edit webhook → Security. Required to accept webhook events.
 - **Merchant account**: your test merchant account name.
 - In Customer Area, add your origin (e.g. `http://localhost:5001`) to **Allowed origins** for the Client Key.
+- **`SECRET_KEY`**: Set a long random value to securely sign Flask sessions.
+- **`HANA_PASSWORD`**: Required to open the protected Hana page. For your requested local password, set it to `hana`; use a strong unique value before any public deployment.
 
 ## Run
 
@@ -44,7 +60,8 @@ HMAC_SECRET=your_webhook_hmac_key
 Or manually:
 
 ```bash
-source .venv/bin/activate
+VENV_DIR=".venv-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)"
+source "$VENV_DIR/bin/activate"
 python run.py
 ```
 

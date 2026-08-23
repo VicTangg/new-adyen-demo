@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block body_class %}hana-page-body hana-login-page{% endblock %}
+
+{% block content %}
+<section class="hana-login">
+  <div class="hana-login-card">
+    <p class="hana-eyebrow">Private Hana archive</p>
+    <h1 class="page-title">Unlock Hana</h1>
+    <p class="page-lead">Enter the password to view the gallery and talk with Rumi.</p>
+    <form class="hana-login-form" method="post">
+      <label for="hana-password">Password</label>
+      <input id="hana-password" name="password" type="password" autocomplete="current-password" required autofocus>
+      {% if error %}
+        <p class="hana-login-error" role="alert">{{ error }}</p>
+      {% endif %}
+      <button type="submit">Unlock Hana</button>
+    </form>
+    <p><a href="{{ url_for('pages.index') }}" class="link">← Back to Home</a></p>
+  </div>
+</section>
+{% endblock %}

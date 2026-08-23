@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block body_class %}hana-page-body{% endblock %}
+
+{% block content %}
+<section class="page hana-page">
+  <div class="hana-flower-field" aria-hidden="true">
+    <span>✿</span>
+    <span>❀</span>
+    <span>✾</span>
+    <span>✿</span>
+    <span>❀</span>
+    <span>✾</span>
+    <span>✿</span>
+    <span>❀</span>
+  </div>
+  <header class="hana-hero">
+    <p class="hana-eyebrow">Hana archive · Rumi style</p>
+    <h1 class="page-title">Hana</h1>
+    <p class="page-lead">A neon-lit collection of Harry Potter and HUNTR/X images from their public galleries.</p>
+  </header>
+  {% for gallery in galleries %}
+    <section class="hana-gallery-section">
+      <h2 class="hana-gallery-title">{{ gallery.title }}</h2>
+      {% if gallery.images %}
+        <div class="cards hana-gallery">
+          {% for image in gallery.images %}
+            <figure class="card">
+              <a href="{{ image.source_url }}" target="_blank" rel="noopener">
+                <img src="{{ image.url }}" alt="{{ image.alt }}" loading="lazy">
+              </a>
+              <figcaption>
+                <a href="{{ image.source_url }}" target="_blank" rel="noopener">{{ image.source_name }}</a>
+              </figcaption>
+            </figure>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="hana-gallery-empty">Images are temporarily unavailable from this public gallery.</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+  <p><a href="{{ url_for('pages.index') }}" class="link">← Back to Home</a></p>
+</section>
+
+<button id="rumi-chat-launcher" class="rumi-chat-launcher" type="button" aria-haspopup="dialog" aria-controls="rumi-chat-dialog">
+  <span class="rumi-chat-launcher-orb" aria-hidden="true">✦</span>
+  Talk with Rumi
+</button>
+
+<dialog id="rumi-chat-dialog" class="rumi-chat-dialog" aria-labelledby="rumi-chat-title">
+  <div class="rumi-chat-dialog-content">
+    <header class="rumi-chat-header">
+      <div>
+        <p class="rumi-chat-kicker">Fan-made interactive chat</p>
+        <h2 id="rumi-chat-title">Talk with Rumi</h2>
+      </div>
+      <button id="rumi-chat-close" class="rumi-chat-close" type="button" aria-label="Close Rumi chat">&times;</button>
+    </header>
+
+    <div id="rumi-chat-messages" class="rumi-chat-messages" aria-live="polite" aria-relevant="additions">
+      <article class="rumi-chat-message rumi-chat-message-rumi">
+        <p class="rumi-chat-speaker">Rumi</p>
+        <p>Hey, star. Pick one of the prompts below and we can talk.</p>
+      </article>
+    </div>
+
+    <section id="rumi-chat-prompts" class="rumi-chat-prompts" aria-labelledby="rumi-chat-prompts-title">
+      <p id="rumi-chat-prompts-title">Choose a prepared response</p>
+      <div id="rumi-chat-prompt-list" class="rumi-chat-prompt-list"></div>
+      <button id="rumi-math-launch" class="rumi-chat-math-launch" type="button">Start the 100-question Math Quest</button>
+      <button id="rumi-chat-restart" class="rumi-chat-restart" type="button">Start over</button>
+    </section>
+
+    <section id="rumi-math-quest" class="rumi-math-quest" aria-labelledby="rumi-math-title" hidden>
+      <header class="rumi-math-header">
+        <div>
+          <p class="rumi-chat-kicker">Rumi’s Grade 3 Math Quest</p>
+          <h3 id="rumi-math-title">Ready for the next challenge?</h3>
+        </div>
+        <p id="rumi-math-progress" class="rumi-math-progress" aria-live="polite"></p>
+      </header>
+      <p id="rumi-math-question" class="rumi-math-question"></p>
+      <div id="rumi-math-choices" class="rumi-math-choices" aria-label="Choose an answer"></div>
+      <p id="rumi-math-feedback" class="rumi-math-feedback" role="status"></p>
+      <div class="rumi-math-actions">
+        <button id="rumi-math-next" class="rumi-math-next" type="button" hidden>Next question</button>
+        <button id="rumi-math-exit" class="rumi-math-exit" type="button">Back to chat</button>
+      </div>
+    </section>
+  </div>
+</dialog>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/hana-chat.js') }}" defer></script>
+{% endblock %}
