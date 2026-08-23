@@ -25,8 +25,13 @@
       {% if gallery.images %}
         <div class="cards hana-gallery">
           {% for image in gallery.images %}
-            <figure class="card">
-              <a href="{{ image.source_url }}" target="_blank" rel="noopener">
+            <figure class="card hana-gallery-card" data-image-state="loading" aria-busy="true">
+              <a class="hana-gallery-image-link" href="{{ image.source_url }}" target="_blank" rel="noopener">
+                <span class="hana-gallery-loader" role="status">
+                  <span class="hana-gallery-spinner" aria-hidden="true"></span>
+                  <span class="hana-visually-hidden">Loading image</span>
+                </span>
+                <span class="hana-gallery-failure" role="status">Image unavailable</span>
                 <img src="{{ image.url }}" alt="{{ image.alt }}" loading="lazy">
               </a>
               <figcaption>

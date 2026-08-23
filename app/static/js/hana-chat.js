@@ -587,20 +587,47 @@
     return;
   }
 
+  const setGalleryImageState = (image, state) => {
+    const card = image.closest(".hana-gallery-card");
+    if (!card) {
+      return;
+    }
+    card.dataset.imageState = state;
+    card.setAttribute("aria-busy", String(state === "loading"));
+  };
+
   galleryImages.forEach((image) => {
-    image.addEventListener("error", () => {
+    setGalleryImageState(image, "loading");
+
+    image.addEventListener("load", () => {
+      setGalleryImageState(image, "loaded");
+    });
+
+    const retryImage = () => {
       const retries = Number(image.dataset.retryCount || 0);
       if (retries >= 2) {
+        setGalleryImageState(image, "failed");
         return;
       }
 
       image.dataset.retryCount = String(retries + 1);
+      setGalleryImageState(image, "loading");
       window.setTimeout(() => {
         const retryUrl = new URL(image.src, window.location.href);
         retryUrl.searchParams.set("retry", String(retries + 1));
         image.src = retryUrl.toString();
       }, 750 * (retries + 1));
-    });
+    };
+
+    image.addEventListener("error", retryImage);
+
+    if (image.complete) {
+      if (image.naturalWidth > 0) {
+        setGalleryImageState(image, "loaded");
+      } else {
+        retryImage();
+      }
+    }
   });
 
   const initialMessages = messages.innerHTML;
